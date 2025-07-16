@@ -1,8 +1,6 @@
-[gd_scene load_steps=6 format=3 uid="uid://dn58rrkgbd6d3"]
+[gd_scene load_steps=4 format=3 uid="uid://dn58rrkgbd6d3"]
 
 [ext_resource type="Script" uid="uid://df1ntxpad2nqb" path="res://player.gd" id="1_4flbx"]
-[ext_resource type="Texture2D" uid="uid://dlyjyx7kn05h7" path="res://assets/crosshair1.png" id="2_i3pqv"]
-[ext_resource type="Texture2D" uid="uid://co4geqh1lpeqm" path="res://assets/crosshair2.png" id="3_hqtel"]
 [ext_resource type="PackedScene" uid="uid://ce6k1ypu43aaw" path="res://assets/models/player1.glb" id="4_player1"]
 [ext_resource type="PackedScene" uid="uid://dqdhyykrrnlgr" path="res://jet_exhaust.tscn" id="5_jet"]
 
@@ -20,14 +18,6 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.752978, 0.0370641, -0.47592
 
 [node name="Gun2" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.759063, 0.036345, -0.46072)
-
-[node name="Crosshair" type="Sprite3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -23.5877)
-texture = ExtResource("2_i3pqv")
-
-[node name="Crosshair2" type="Sprite3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -59.3614)
-texture = ExtResource("3_hqtel")
 
 [node name="JetExhaust" parent="." instance=ExtResource("5_jet")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.214051, 0.141974, 0.652996)

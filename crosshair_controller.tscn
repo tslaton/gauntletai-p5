@@ -1,0 +1,16 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://crosshair_controller.gd" id="1_cc"]
+[ext_resource type="Texture2D" uid="uid://dlyjyx7kn05h7" path="res://assets/crosshair1.png" id="2_cr1"]
+[ext_resource type="Texture2D" uid="uid://co4geqh1lpeqm" path="res://assets/crosshair2.png" id="3_cr2"]
+
+[node name="CrosshairController" type="Node3D"]
+script = ExtResource("1_cc")
+
+[node name="Crosshair" type="Sprite3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -23.5877)
+texture = ExtResource("2_cr1")
+
+[node name="Crosshair2" type="Sprite3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -59.3614)
+texture = ExtResource("3_cr2")
