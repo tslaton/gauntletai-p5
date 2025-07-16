@@ -19,7 +19,7 @@ glow_bloom = 0.25
 [node name="Main" type="Node3D"]
 
 [node name="player" parent="." instance=ExtResource("1_ig7tw")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -13)
+transform = Transform3D(3.5, 0, 0, 0, 3.5, 0, 0, 0, 3.5, 0, 0, -11)
 
 [node name="Camera3D" type="Camera3D" parent="."]
 far = 300.0

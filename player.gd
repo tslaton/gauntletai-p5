@@ -15,7 +15,7 @@ var main: Node3D
 var Bullet = load("res://bullet.tscn")
 
 func _ready():
-	guns = [$Gun0, $Gun1]
+	guns = [$Gun1, $Gun2]
 	main = get_tree().current_scene
 
 func _physics_process(delta: float) -> void:
@@ -42,8 +42,9 @@ func _physics_process(delta: float) -> void:
 		for i in guns:
 			var bullet = Bullet.instantiate()
 			main.add_child(bullet)
-			bullet.transform = i.global_transform
-			bullet.velocity = bullet.transform.basis.z * BULLET_SPEED
+			bullet.global_position = i.global_position
+			bullet.global_rotation = i.global_rotation
+			bullet.velocity = bullet.global_transform.basis.z * BULLET_SPEED
 	# bullet cooldown
 	if bullet_cooldown > 0:
 		bullet_cooldown -= 1

@@ -12,6 +12,7 @@ material = SubResource("StandardMaterial3D_rtl8c")
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_v8qja"]
 
 [node name="Bullet" type="CharacterBody3D"]
+transform = Transform3D(0.75, 0, 0, 0, 0.75, 0, 0, 0, 0.75, 0, 0, 0)
 script = ExtResource("1_v7oki")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="."]
