@@ -17,5 +17,6 @@ config/icon="res://assets/icon.svg"
 
 [display]
 
-window/size/viewport_width=2560
-window/size/viewport_height=1440
+window/size/viewport_width=3456
+window/size/viewport_height=2234
+window/size/mode=3
