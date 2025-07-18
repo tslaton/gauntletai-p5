@@ -20,11 +20,15 @@ const BULLET_SPEED = -600         # negative: toward player
 const BULLET_COOLDOWN = 8         # frames
 
 # Health system
-@export var max_health: int = 100
-@export var current_health: int = 100
+@export var max_health: int = 10000
+@export var current_health: int = 10000
 @export var bullet_damage: int = 10  # Damage dealt by player bullets
 signal health_changed(new_health: int, max_health: int)
 signal player_died()
+
+# Weapon system
+var laser_stage: int = 1  # Current laser upgrade level (1-3)
+signal laser_upgraded(new_stage: int)
 
 # Movement variables
 var actual_velocity = Vector3()   # Current velocity with momentum
@@ -40,9 +44,11 @@ const HIT_FLASH_DURATION: float = 0.1
 
 # References
 var guns: Array[Node3D]
+var gun0: Node3D  # Center gun for stage 1
 var main: Node3D
 var crosshair_controller: Node3D
 var Bullet = load("res://projectiles/bullet.tscn")
+var BlueBullet = load("res://projectiles/blue_bullet.tscn")
 var LaserImpact = load("res://fx/laser_impact.tscn")
 var Explosion = load("res://fx/explosion.tscn")
 
@@ -51,6 +57,7 @@ func _ready():
 	add_to_group("Player")
 	
 	guns = [$Gun1, $Gun2]
+	gun0 = $Gun0  # Center gun
 	main = get_tree().current_scene
 	# Find crosshair controller in main scene
 	crosshair_controller = main.get_node_or_null("CrosshairController")
@@ -157,13 +164,30 @@ func shoot_at_crosshair():
 	var distance_to_target_z = (target_z - crosshair1_pos.z) / crosshair_direction.z
 	var target_pos = crosshair1_pos + (crosshair_direction * distance_to_target_z)
 	
-	for gun in guns:
-		var bullet = Bullet.instantiate()
+	# Determine which guns to use based on laser_stage
+	var guns_to_use: Array[Node3D] = []
+	var damage_to_apply: int = 10
+	var bullet_scene = Bullet
+	
+	match laser_stage:
+		1:
+			guns_to_use = [gun0]
+			damage_to_apply = 10
+		2:
+			guns_to_use = guns
+			damage_to_apply = 20
+		3:
+			guns_to_use = guns
+			damage_to_apply = 30
+			bullet_scene = BlueBullet if BlueBullet else Bullet
+	
+	for gun in guns_to_use:
+		var bullet = bullet_scene.instantiate()
 		main.add_child(bullet)
 		bullet.global_position = gun.global_position
 		
 		# Store damage value in bullet metadata
-		bullet.set_meta("damage", bullet_damage)
+		bullet.set_meta("damage", damage_to_apply)
 		
 		# Calculate direction from gun to the target position
 		var direction = (target_pos - gun.global_position).normalized()
@@ -242,3 +266,16 @@ func restore_materials():
 	for i in range(mesh_instances.size()):
 		if i < original_materials.size() and mesh_instances[i]:
 			mesh_instances[i].set_surface_override_material(0, original_materials[i])
+
+func collect_pickup(pickup_type: String):
+	match pickup_type:
+		"health":
+			# Heal the player
+			var heal_amount = 20
+			current_health = min(current_health + heal_amount, max_health)
+			emit_signal("health_changed", current_health, max_health)
+		"laser":
+			# Upgrade laser stage
+			if laser_stage < 3:
+				laser_stage += 1
+				emit_signal("laser_upgraded", laser_stage)

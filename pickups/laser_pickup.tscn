@@ -1,0 +1,18 @@
+[gd_scene load_steps=4 format=3 uid="uid://bqr5jk4p8xwvl"]
+
+[ext_resource type="PackedScene" uid="uid://dcmvxgf8hqo18" path="res://assets/models/laser_pickup.glb" id="1_7m4jh"]
+[ext_resource type="Script" path="res://pickups/pickup.gd" id="2_d8qxc"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_1"]
+radius = 5.0
+
+[node name="LaserPickup" type="Area3D"]
+collision_layer = 16
+collision_mask = 1
+script = ExtResource("2_d8qxc")
+pickup_type = "laser"
+
+[node name="laser_pickup" parent="." instance=ExtResource("1_7m4jh")]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("SphereShape3D_1")

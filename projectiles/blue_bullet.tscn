@@ -1,0 +1,31 @@
+[gd_scene load_steps=5 format=3 uid="uid://dxkr8g3wcmf5h"]
+
+[ext_resource type="Script" uid="uid://c7kol05g77wew" path="res://projectiles/bullet.gd" id="1_v7oki"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_rtl8c"]
+emission_enabled = true
+emission = Color(0, 0.501961, 1, 1)
+emission_energy = 2.0
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_rtl8c"]
+material = SubResource("StandardMaterial3D_rtl8c")
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_v8qja"]
+
+[node name="Bullet" type="CharacterBody3D"]
+transform = Transform3D(0.75, 0, 0, 0, 0.75, 0, 0, 0, 0.75, 0, 0, 0)
+script = ExtResource("1_v7oki")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.4, 0, 0, 0, -4.37114e-08, -0.4, 0, 1, -1.74846e-08, 0, 0, 0)
+mesh = SubResource("CapsuleMesh_rtl8c")
+
+[node name="Area3D" type="Area3D" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Area3D"]
+transform = Transform3D(1, 0, 0, 0, -4.37114e-08, -1, 0, 1, -4.37114e-08, 0, 0, 0)
+shape = SubResource("CapsuleShape3D_v8qja")
+
+[node name="Gun0" type="Node3D" parent="."]
+
+[connection signal="body_entered" from="Area3D" to="." method="_on_area_3d_body_entered"]

@@ -13,6 +13,8 @@ var current_health: int
 var Explosion = preload("res://fx/explosion.tscn")
 var EnemyBullet = preload("res://projectiles/enemy_bullet.tscn")
 var LaserImpact = preload("res://fx/laser_impact.tscn")
+var LaserPickup = preload("res://pickups/laser_pickup.tscn")
+var HealthPickup = preload("res://pickups/health_pickup.tscn")
 var shoot_timer: float = 0.0
 var player_ref: Node3D
 var mesh_instance: MeshInstance3D
@@ -120,5 +122,21 @@ func die():
 	var explosion = Explosion.instantiate()
 	get_parent().add_child(explosion)
 	explosion.global_position = global_position
+	
+	# Chance to spawn pickups
+	var rand = randf()
+	if rand < 0.2:  # 20% chance for laser pickup
+		spawn_pickup(LaserPickup)
+	elif rand < 0.4:  # 20% chance for health pickup (0.2 + 0.2 = 0.4)
+		spawn_pickup(HealthPickup)
+	
 	# Remove the enemy
 	queue_free()
+
+func spawn_pickup(pickup_scene: PackedScene):
+	var pickup = pickup_scene.instantiate()
+	get_parent().add_child(pickup)
+	pickup.global_position = global_position
+	
+	# Continue enemy's trajectory toward player
+	pickup.velocity = Vector3(0, 0, speed)
