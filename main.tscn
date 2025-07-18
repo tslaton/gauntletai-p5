@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3 uid="uid://tajadoja5alj"]
+[gd_scene load_steps=22 format=3 uid="uid://tajadoja5alj"]
 
 [ext_resource type="PackedScene" uid="uid://dn58rrkgbd6d3" path="res://player/player.tscn" id="1_ig7tw"]
 [ext_resource type="PackedScene" uid="uid://o7u1753b3smj" path="res://enemies/enemy_spawner.tscn" id="2_0xm2m"]
@@ -7,6 +7,8 @@
 [ext_resource type="Texture2D" uid="uid://bsy3x28camsv0" path="res://assets/textures/terrain/cliff_nrm_rgh.png" id="5_5vw27"]
 [ext_resource type="Texture2D" uid="uid://cx2mrmxdmm7kg" path="res://assets/textures/terrain/sand_alb_ht.png" id="6_kek77"]
 [ext_resource type="Texture2D" uid="uid://do4gihebi15pe" path="res://assets/textures/terrain/sand_nrm_rgh.png" id="7_4c57u"]
+[ext_resource type="Script" uid="uid://dtut4d2fumblk" path="res://main.gd" id="8_main_script"]
+[ext_resource type="PackedScene" path="res://fx/mars_dust.tscn" id="9_kek77"]
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_h2yge"]
 
@@ -18,6 +20,13 @@ background_mode = 2
 sky = SubResource("Sky_lquwl")
 glow_enabled = true
 glow_bloom = 0.25
+fog_light_color = Color(0.895005, 0.671955, 0.316191, 1)
+fog_light_energy = 0.5
+fog_sun_scatter = 0.2
+fog_density = 0.001
+fog_aerial_perspective = 0.5
+fog_height = 30.0
+fog_height_density = 0.05
 
 [sub_resource type="Gradient" id="Gradient_h2yge"]
 offsets = PackedFloat32Array(0.2, 1)
@@ -106,25 +115,26 @@ mesh_list = Array[Terrain3DMeshAsset]([SubResource("Terrain3DMeshAsset_dg77c")])
 texture_list = Array[Terrain3DTextureAsset]([SubResource("Terrain3DTextureAsset_efxa6"), SubResource("Terrain3DTextureAsset_dg77c")])
 
 [node name="Main" type="Node3D"]
+script = ExtResource("8_main_script")
 
 [node name="player" parent="." instance=ExtResource("1_ig7tw")]
-transform = Transform3D(3.5, 0, 0, 0, 3.5, 0, 0, 0, 3.5, 0, 1.4902, -11)
+transform = Transform3D(3.5, 0, 0, 0, 3.5, 0, 0, 0, 3.5, 0, 21.4902, -11)
 
 [node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4902, 0)
-far = 300.0
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 21.4902, 0)
+far = 1000.0
 
 [node name="EnemySpawner" parent="." instance=ExtResource("2_0xm2m")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4902, -300)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 21.4902, -300)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_7mycd")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 8.4902, 0)
+transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 28.4902, 0)
 
 [node name="CrosshairController" parent="." instance=ExtResource("4_crosshair")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4902, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 21.4902, 0)
 
 [node name="Terrain3D" type="Terrain3D" parent="."]
 data_directory = "res://terrain"
@@ -132,3 +142,8 @@ material = SubResource("Terrain3DMaterial_7mycd")
 assets = SubResource("Terrain3DAssets_vivmo")
 top_level = true
 metadata/_edit_lock_ = true
+
+[node name="MarsDust" parent="." instance=ExtResource("9_kek77")]
+fog_color = Color(0.895005, 0.671955, 0.316191, 1)
+fog_density = 0.001
+fog_height_falloff = 0.05

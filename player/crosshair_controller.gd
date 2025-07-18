@@ -26,6 +26,7 @@ func _ready():
 	# Initialize position
 	if player:
 		crosshair_position = player.transform.origin
+		crosshair_position.y = Global.DEFAULT_FLYING_HEIGHT
 		crosshair_position.z = 0  # Keep crosshair at consistent Z
 
 func _physics_process(delta: float) -> void:
@@ -37,9 +38,9 @@ func _physics_process(delta: float) -> void:
 	crosshair_position.x += input_vector.x * CROSSHAIR_SPEED * delta
 	crosshair_position.y += input_vector.y * CROSSHAIR_SPEED * delta
 	
-	# Clamp to bounds
+	# Clamp to bounds (relative to flying height)
 	crosshair_position.x = clamp(crosshair_position.x, -SCREEN_BOUNDS_X, SCREEN_BOUNDS_X)
-	crosshair_position.y = clamp(crosshair_position.y, -SCREEN_BOUNDS_Y, SCREEN_BOUNDS_Y)
+	crosshair_position.y = clamp(crosshair_position.y, Global.DEFAULT_FLYING_HEIGHT - SCREEN_BOUNDS_Y, Global.DEFAULT_FLYING_HEIGHT + SCREEN_BOUNDS_Y)
 	
 	# Update visual positions
 	transform.origin = crosshair_position
