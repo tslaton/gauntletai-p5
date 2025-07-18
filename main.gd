@@ -1,6 +1,7 @@
 extends Node3D
 
 var MarsDustScene = preload("res://fx/mars_dust.tscn")
+var HealthDisplayScene = preload("res://ui/health_display.tscn")
 
 func _ready():
 	# Position player at default flying height
@@ -22,6 +23,10 @@ func _ready():
 	var mars_dust = $MarsDust
 	if mars_dust:
 		Global.mars_dust_effect = mars_dust
+	
+	# Add health display UI
+	var health_display = HealthDisplayScene.instantiate()
+	add_child(health_display)
 
 func _input(event):
 	# Toggle Mars dust with 'M' key

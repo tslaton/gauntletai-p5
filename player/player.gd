@@ -19,6 +19,12 @@ const MAX_YAW_ANGLE = 25          # Maximum yaw angle
 const BULLET_SPEED = -600         # negative: toward player
 const BULLET_COOLDOWN = 8         # frames
 
+# Health system
+@export var max_health: int = 100
+@export var current_health: int = 100
+signal health_changed(new_health: int, max_health: int)
+signal player_died()
+
 # Movement variables
 var actual_velocity = Vector3()   # Current velocity with momentum
 var target_velocity = Vector3()   # Where we want to go
@@ -32,10 +38,17 @@ var crosshair_controller: Node3D
 var Bullet = load("res://projectiles/bullet.tscn")
 
 func _ready():
+	# Add player to Player group for enemy targeting
+	add_to_group("Player")
+	
 	guns = [$Gun1, $Gun2]
 	main = get_tree().current_scene
 	# Find crosshair controller in main scene
 	crosshair_controller = main.get_node_or_null("CrosshairController")
+	
+	# Initialize health
+	current_health = max_health
+	emit_signal("health_changed", current_health, max_health)
 
 func _physics_process(delta: float) -> void:
 	if not crosshair_controller:
@@ -140,4 +153,19 @@ func shoot_at_crosshair():
 		# Orient bullet to face direction
 		if direction.length() > 0:
 			bullet.look_at(bullet.global_position + direction, Vector3.UP)
-		
+
+func take_damage(damage: int):
+	current_health -= damage
+	current_health = max(0, current_health)
+	emit_signal("health_changed", current_health, max_health)
+	
+	if current_health <= 0:
+		emit_signal("player_died")
+		# For now, just respawn with full health
+		respawn()
+
+func respawn():
+	current_health = max_health
+	emit_signal("health_changed", current_health, max_health)
+	# Reset position to starting position
+	position = Vector3(0, Global.DEFAULT_FLYING_HEIGHT, -11)
