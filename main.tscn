@@ -1,8 +1,12 @@
-[gd_scene load_steps=7 format=3 uid="uid://tajadoja5alj"]
+[gd_scene load_steps=20 format=3 uid="uid://tajadoja5alj"]
 
-[ext_resource type="PackedScene" uid="uid://dn58rrkgbd6d3" path="res://player.tscn" id="1_ig7tw"]
-[ext_resource type="PackedScene" uid="uid://o7u1753b3smj" path="res://enemy_spawner.tscn" id="2_0xm2m"]
-[ext_resource type="PackedScene" uid="uid://dc67ms7qu54ul" path="res://crosshair_controller.tscn" id="4_crosshair"]
+[ext_resource type="PackedScene" uid="uid://dn58rrkgbd6d3" path="res://player/player.tscn" id="1_ig7tw"]
+[ext_resource type="PackedScene" uid="uid://o7u1753b3smj" path="res://enemies/enemy_spawner.tscn" id="2_0xm2m"]
+[ext_resource type="Texture2D" uid="uid://d0u6bi1ac3cj" path="res://assets/textures/terrain/cliff_alb_ht.png" id="4_272bh"]
+[ext_resource type="PackedScene" uid="uid://dc67ms7qu54ul" path="res://player/crosshair_controller.tscn" id="4_crosshair"]
+[ext_resource type="Texture2D" uid="uid://bsy3x28camsv0" path="res://assets/textures/terrain/cliff_nrm_rgh.png" id="5_5vw27"]
+[ext_resource type="Texture2D" uid="uid://cx2mrmxdmm7kg" path="res://assets/textures/terrain/sand_alb_ht.png" id="6_kek77"]
+[ext_resource type="Texture2D" uid="uid://do4gihebi15pe" path="res://assets/textures/terrain/sand_nrm_rgh.png" id="7_4c57u"]
 
 [sub_resource type="PhysicalSkyMaterial" id="PhysicalSkyMaterial_h2yge"]
 
@@ -12,34 +16,119 @@ sky_material = SubResource("PhysicalSkyMaterial_h2yge")
 [sub_resource type="Environment" id="Environment_7mycd"]
 background_mode = 2
 sky = SubResource("Sky_lquwl")
-ambient_light_source = 2
-ambient_light_color = Color(0.8, 0.6, 0.5, 1)
-ambient_light_sky_contribution = 0.3
-ambient_light_energy = 0.5
-tonemap_mode = 2
 glow_enabled = true
 glow_bloom = 0.25
-fog_enabled = true
-fog_light_color = Color(0.8, 0.5, 0.3, 1)
-fog_sun_scatter = 0.3
-fog_height = -50.0
-fog_height_density = 0.3
+
+[sub_resource type="Gradient" id="Gradient_h2yge"]
+offsets = PackedFloat32Array(0.2, 1)
+colors = PackedColorArray(1, 1, 1, 1, 0, 0, 0, 1)
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_1bvp3"]
+noise_type = 2
+frequency = 0.03
+cellular_jitter = 3.0
+cellular_return_type = 0
+domain_warp_enabled = true
+domain_warp_type = 1
+domain_warp_amplitude = 50.0
+domain_warp_fractal_type = 2
+domain_warp_fractal_lacunarity = 1.5
+domain_warp_fractal_gain = 1.0
+
+[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_lquwl"]
+seamless = true
+color_ramp = SubResource("Gradient_h2yge")
+noise = SubResource("FastNoiseLite_1bvp3")
+
+[sub_resource type="Terrain3DMaterial" id="Terrain3DMaterial_7mycd"]
+_shader_parameters = {
+&"auto_base_texture": 0,
+&"auto_height_reduction": 0.1,
+&"auto_overlay_texture": 1,
+&"auto_slope": 1.0,
+&"bias_distance": 512.0,
+&"blend_sharpness": 0.5,
+&"depth_blur": 0.0,
+&"dual_scale_far": 170.0,
+&"dual_scale_near": 100.0,
+&"dual_scale_reduction": 0.3,
+&"dual_scale_texture": 0,
+&"enable_macro_variation": true,
+&"enable_projection": true,
+&"flat_terrain_normals": false,
+&"macro_variation1": Color(1, 1, 1, 1),
+&"macro_variation2": Color(1, 1, 1, 1),
+&"macro_variation_slope": 0.333,
+&"mipmap_bias": 1.0,
+&"noise1_angle": 0.0,
+&"noise1_offset": Vector2(0.5, 0.5),
+&"noise1_scale": 0.04,
+&"noise2_scale": 0.076,
+&"noise_texture": SubResource("NoiseTexture2D_lquwl"),
+&"projection_threshold": 0.8,
+&"tri_scale_reduction": 0.3
+}
+world_background = 0
+auto_shader = true
+dual_scaling = true
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_efxa6"]
+transparency = 4
+cull_mode = 2
+vertex_color_use_as_albedo = true
+backlight_enabled = true
+backlight = Color(0.5, 0.5, 0.5, 1)
+distance_fade_mode = 1
+distance_fade_min_distance = 128.0
+distance_fade_max_distance = 96.0
+
+[sub_resource type="Terrain3DMeshAsset" id="Terrain3DMeshAsset_dg77c"]
+generated_type = 1
+height_offset = 0.5
+material_override = SubResource("StandardMaterial3D_efxa6")
+last_lod = 0
+last_shadow_lod = 0
+lod0_range = 128.0
+
+[sub_resource type="Terrain3DTextureAsset" id="Terrain3DTextureAsset_efxa6"]
+name = "cliff_alb_ht"
+albedo_texture = ExtResource("4_272bh")
+normal_texture = ExtResource("5_5vw27")
+
+[sub_resource type="Terrain3DTextureAsset" id="Terrain3DTextureAsset_dg77c"]
+name = "sand_alb_ht"
+id = 1
+albedo_texture = ExtResource("6_kek77")
+normal_texture = ExtResource("7_4c57u")
+
+[sub_resource type="Terrain3DAssets" id="Terrain3DAssets_vivmo"]
+mesh_list = Array[Terrain3DMeshAsset]([SubResource("Terrain3DMeshAsset_dg77c")])
+texture_list = Array[Terrain3DTextureAsset]([SubResource("Terrain3DTextureAsset_efxa6"), SubResource("Terrain3DTextureAsset_dg77c")])
 
 [node name="Main" type="Node3D"]
 
 [node name="player" parent="." instance=ExtResource("1_ig7tw")]
-transform = Transform3D(3.5, 0, 0, 0, 3.5, 0, 0, 0, 3.5, 0, 0, -11)
+transform = Transform3D(3.5, 0, 0, 0, 3.5, 0, 0, 0, 3.5, 0, 1.4902, -11)
 
 [node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4902, 0)
 far = 300.0
 
 [node name="EnemySpawner" parent="." instance=ExtResource("2_0xm2m")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -300)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4902, -300)
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_7mycd")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 7, 0)
+transform = Transform3D(1, 0, 0, 0, 0.866025, 0.5, 0, -0.5, 0.866025, 0, 8.4902, 0)
 
 [node name="CrosshairController" parent="." instance=ExtResource("4_crosshair")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.4902, 0)
+
+[node name="Terrain3D" type="Terrain3D" parent="."]
+data_directory = "res://terrain"
+material = SubResource("Terrain3DMaterial_7mycd")
+assets = SubResource("Terrain3DAssets_vivmo")
+top_level = true
+metadata/_edit_lock_ = true
