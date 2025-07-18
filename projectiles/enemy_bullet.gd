@@ -16,4 +16,13 @@ func _on_area_3d_body_entered(body: Node3D) -> void:
 			# Get damage amount from the enemy who fired this bullet
 			var damage = get_meta("damage", 10) # Default 10 damage if not set
 			body.take_damage(damage)
+		
+		# Create impact effect
+		create_impact_effect(global_position)
 		queue_free()
+
+func create_impact_effect(position: Vector3):
+	var LaserImpact = preload("res://fx/laser_impact.tscn")
+	var impact = LaserImpact.instantiate()
+	get_parent().add_child(impact)
+	impact.global_position = position

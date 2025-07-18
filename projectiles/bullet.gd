@@ -13,8 +13,21 @@ func _physics_process(delta: float) -> void:
 func _on_area_3d_body_entered(body: Node3D) -> void:
 	# check for a hit, then recylce the bullet and enemy
 	if body.is_in_group("Enemies"):
-		if body.has_method("die"):
+		if body.has_method("take_damage"):
+			# Get damage amount from bullet metadata
+			var damage = get_meta("damage", 10) # Default 10 if not set
+			body.take_damage(damage, global_position)
+		elif body.has_method("die"):
 			body.die()
 		else:
 			body.queue_free()
+		
+		# Create impact effect
+		create_impact_effect(global_position)
 		queue_free()
+
+func create_impact_effect(position: Vector3):
+	var LaserImpact = preload("res://fx/laser_impact.tscn")
+	var impact = LaserImpact.instantiate()
+	get_parent().add_child(impact)
+	impact.global_position = position

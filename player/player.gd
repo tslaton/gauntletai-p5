@@ -22,6 +22,7 @@ const BULLET_COOLDOWN = 8         # frames
 # Health system
 @export var max_health: int = 100
 @export var current_health: int = 100
+@export var bullet_damage: int = 10  # Damage dealt by player bullets
 signal health_changed(new_health: int, max_health: int)
 signal player_died()
 
@@ -31,11 +32,18 @@ var target_velocity = Vector3()   # Where we want to go
 var bullet_cooldown = 0
 var current_rotation = Vector3()  # Smooth rotation tracking
 
+# Hit flash variables
+var hit_flash_timer: float = 0.0
+var mesh_instances: Array[MeshInstance3D] = []
+var original_materials: Array[Material] = []
+const HIT_FLASH_DURATION: float = 0.1
+
 # References
 var guns: Array[Node3D]
 var main: Node3D
 var crosshair_controller: Node3D
 var Bullet = load("res://projectiles/bullet.tscn")
+var LaserImpact = load("res://fx/laser_impact.tscn")
 
 func _ready():
 	# Add player to Player group for enemy targeting
@@ -49,10 +57,19 @@ func _ready():
 	# Initialize health
 	current_health = max_health
 	emit_signal("health_changed", current_health, max_health)
+	
+	# Get all mesh instances for hit flash effect
+	find_mesh_instances(self)
 
 func _physics_process(delta: float) -> void:
 	if not crosshair_controller:
 		return
+	
+	# Handle hit flash
+	if hit_flash_timer > 0:
+		hit_flash_timer -= delta
+		if hit_flash_timer <= 0:
+			restore_materials()
 		
 	# Get crosshair position
 	var crosshair_pos = crosshair_controller.global_position
@@ -144,6 +161,9 @@ func shoot_at_crosshair():
 		main.add_child(bullet)
 		bullet.global_position = gun.global_position
 		
+		# Store damage value in bullet metadata
+		bullet.set_meta("damage", bullet_damage)
+		
 		# Calculate direction from gun to the target position
 		var direction = (target_pos - gun.global_position).normalized()
 		
@@ -159,6 +179,9 @@ func take_damage(damage: int):
 	current_health = max(0, current_health)
 	emit_signal("health_changed", current_health, max_health)
 	
+	# Flash effect
+	flash_hit()
+	
 	if current_health <= 0:
 		emit_signal("player_died")
 		# For now, just respawn with full health
@@ -169,3 +192,36 @@ func respawn():
 	emit_signal("health_changed", current_health, max_health)
 	# Reset position to starting position
 	position = Vector3(0, Global.DEFAULT_FLYING_HEIGHT, -11)
+
+func find_mesh_instances(node: Node):
+	if node is MeshInstance3D:
+		mesh_instances.append(node)
+		# Store original material
+		var original_mat = node.get_surface_override_material(0)
+		if not original_mat and node.mesh:
+			original_mat = node.mesh.surface_get_material(0)
+		original_materials.append(original_mat)
+	
+	for child in node.get_children():
+		find_mesh_instances(child)
+
+func flash_hit():
+	# Create red flash material
+	var flash_mat = StandardMaterial3D.new()
+	flash_mat.albedo_color = Color(1, 0, 0, 1)
+	flash_mat.emission_enabled = true
+	flash_mat.emission = Color(1, 0, 0, 1)
+	flash_mat.emission_energy = 2.0
+	
+	# Apply to all mesh instances
+	for i in range(mesh_instances.size()):
+		if mesh_instances[i]:
+			mesh_instances[i].set_surface_override_material(0, flash_mat)
+	
+	hit_flash_timer = HIT_FLASH_DURATION
+
+func restore_materials():
+	# Restore original materials
+	for i in range(mesh_instances.size()):
+		if i < original_materials.size() and mesh_instances[i]:
+			mesh_instances[i].set_surface_override_material(0, original_materials[i])
