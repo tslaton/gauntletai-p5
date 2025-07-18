@@ -44,6 +44,7 @@ var main: Node3D
 var crosshair_controller: Node3D
 var Bullet = load("res://projectiles/bullet.tscn")
 var LaserImpact = load("res://fx/laser_impact.tscn")
+var Explosion = load("res://fx/explosion.tscn")
 
 func _ready():
 	# Add player to Player group for enemy targeting
@@ -183,15 +184,31 @@ func take_damage(damage: int):
 	flash_hit()
 	
 	if current_health <= 0:
-		emit_signal("player_died")
-		# For now, just respawn with full health
-		respawn()
+		die()
+
+func die():
+	# Create explosion effect
+	var explosion = Explosion.instantiate()
+	get_parent().add_child(explosion)
+	explosion.global_position = global_position
+	
+	# Hide the player
+	visible = false
+	set_physics_process(false)
+	set_process(false)
+	
+	# Emit death signal
+	emit_signal("player_died")
 
 func respawn():
 	current_health = max_health
 	emit_signal("health_changed", current_health, max_health)
 	# Reset position to starting position
 	position = Vector3(0, Global.DEFAULT_FLYING_HEIGHT, -11)
+	# Make visible and re-enable processing
+	visible = true
+	set_physics_process(true)
+	set_process(true)
 
 func find_mesh_instances(node: Node):
 	if node is MeshInstance3D:
