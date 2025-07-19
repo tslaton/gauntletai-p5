@@ -21,6 +21,9 @@ func _ready():
 	
 	join_container.hide()
 	status_label.text = ""
+	
+	# Set default IP for development
+	ip_input.text = "192.168.1.197"
 
 func _on_single_player_pressed():
 	NetworkManager.start_singleplayer()

@@ -30,6 +30,10 @@ func _on_retry_pressed():
 	get_tree().paused = false
 	emit_signal("retry_pressed")
 	visible = false
+	
+func hide_game_over():
+	visible = false
+	get_tree().paused = false
 
 func _on_quit_pressed():
 	emit_signal("quit_pressed")

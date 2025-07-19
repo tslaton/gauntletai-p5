@@ -83,25 +83,35 @@ func shoot_at_player():
 	# In multiplayer, only host controls enemy shooting
 	if NetworkManager.is_multiplayer_game and not NetworkManager.is_host:
 		return
-		
-	# Create bullet
-	var bullet = EnemyBullet.instantiate()
-	get_parent().add_child(bullet)
-	bullet.global_position = global_position
 	
 	# Calculate direction to player with some prediction
 	var player_pos = player_ref.global_position
 	var direction = (player_pos - global_position).normalized()
 	
+	if NetworkManager.is_multiplayer_game:
+		_spawn_enemy_bullet_synced.rpc(global_position, direction, bullet_speed, damage)
+	else:
+		_spawn_enemy_bullet(global_position, direction, bullet_speed, damage)
+
+func _spawn_enemy_bullet(spawn_pos: Vector3, direction: Vector3, speed: float, dmg: int):
+	# Create bullet
+	var bullet = EnemyBullet.instantiate()
+	get_parent().add_child(bullet)
+	bullet.global_position = spawn_pos
+	
 	# Set bullet velocity toward player
-	bullet.velocity = direction * bullet_speed
+	bullet.velocity = direction * speed
 	
 	# Store damage value in bullet metadata
-	bullet.set_meta("damage", damage)
+	bullet.set_meta("damage", dmg)
 	
 	# Orient bullet to face direction
 	if direction.length() > 0:
 		bullet.look_at(bullet.global_position + direction, Vector3.UP)
+
+@rpc("authority", "call_local", "reliable")
+func _spawn_enemy_bullet_synced(spawn_pos: Vector3, direction: Vector3, speed: float, dmg: int):
+	_spawn_enemy_bullet(spawn_pos, direction, speed, dmg)
 
 func take_damage(damage: int, impact_point: Vector3 = Vector3.ZERO):
 	if NetworkManager.is_multiplayer_game:
@@ -159,14 +169,20 @@ func _perform_death():
 	get_parent().add_child(explosion)
 	explosion.global_position = global_position
 	
-	# Only host spawns pickups in multiplayer
+	# Only host decides pickups in multiplayer
 	if not NetworkManager.is_multiplayer_game or NetworkManager.is_host:
 		# Chance to spawn pickups
 		var rand = randf()
 		if rand < 0.2:  # 20% chance for laser pickup
-			spawn_pickup(LaserPickup)
+			if NetworkManager.is_multiplayer_game:
+				_spawn_pickup_synced.rpc("laser", global_position)
+			else:
+				spawn_pickup(LaserPickup)
 		elif rand < 0.4:  # 20% chance for health pickup (0.2 + 0.2 = 0.4)
-			spawn_pickup(HealthPickup)
+			if NetworkManager.is_multiplayer_game:
+				_spawn_pickup_synced.rpc("health", global_position)
+			else:
+				spawn_pickup(HealthPickup)
 	
 	# Remove the enemy
 	queue_free()
@@ -193,4 +209,12 @@ func spawn_pickup(pickup_scene: PackedScene):
 	pickup.global_position = global_position
 	
 	# Continue enemy's trajectory toward player
+	pickup.velocity = Vector3(0, 0, speed)
+
+@rpc("authority", "call_local", "reliable")
+func _spawn_pickup_synced(pickup_type: String, spawn_position: Vector3):
+	var pickup_scene = LaserPickup if pickup_type == "laser" else HealthPickup
+	var pickup = pickup_scene.instantiate()
+	get_parent().add_child(pickup)
+	pickup.global_position = spawn_position
 	pickup.velocity = Vector3(0, 0, speed)

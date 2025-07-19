@@ -27,9 +27,9 @@ func setup_player_connection():
 			_on_health_changed(player.current_health, player.max_health)
 
 func _on_health_changed(current: int, maximum: int):
-	# In multiplayer, show player number
+	# In multiplayer, show player number based on who is host
 	if NetworkManager.is_multiplayer_game and tracked_player_id > 0:
-		var player_num = 1 if tracked_player_id == NetworkManager.local_player_id else 2
+		var player_num = 1 if tracked_player_id == 1 else 2
 		health_label.text = "P%d Health: %d/%d" % [player_num, current, maximum]
 	else:
 		health_label.text = "Health: %d/%d" % [current, maximum]

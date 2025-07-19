@@ -29,12 +29,16 @@ func _update_player_list():
 	player_list.clear()
 	var player_ids = NetworkManager.get_player_ids()
 	
-	for i in range(player_ids.size()):
-		var id = player_ids[i]
-		var player_text = "Player " + str(i + 1)
+	# Sort to ensure consistent order (host first)
+	player_ids.sort()
+	
+	for id in player_ids:
+		# Player number is based on peer_id (1 = host = Player 1, others = Player 2)
+		var player_number = 1 if id == 1 else 2
+		var player_text = "Player " + str(player_number)
 		if id == NetworkManager.local_player_id:
 			player_text += " (You)"
-		if NetworkManager.is_host and id == 1:
+		if id == 1:
 			player_text += " - Host"
 		player_list.add_item(player_text)
 
