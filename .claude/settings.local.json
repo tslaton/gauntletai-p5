@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebFetch(domain:docs.godotengine.org)",
+      "WebFetch(domain:godotengine.org)"
     ],
     "deny": []
   }

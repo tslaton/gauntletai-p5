@@ -1,5 +1,8 @@
 extends CharacterBody3D
 
+@export var player_id: int = 1
+@export var player_number: int = 1  # 1 or 2 for visual ship model
+
 # Movement constants
 const SHIP_ACCELERATION = 4.5      # How quickly ship accelerates
 const SHIP_DRAG = 4.0             # Air resistance/drag (balanced)
@@ -20,8 +23,8 @@ const BULLET_SPEED = -600         # negative: toward player
 const BULLET_COOLDOWN = 8         # frames
 
 # Health system
-@export var max_health: int = 10000
-@export var current_health: int = 10000
+@export var max_health: int = 100
+@export var current_health: int = 100
 @export var bullet_damage: int = 10  # Damage dealt by player bullets
 signal health_changed(new_health: int, max_health: int)
 signal player_died()
@@ -56,6 +59,14 @@ func _ready():
 	# Add player to Player group for enemy targeting
 	add_to_group("Player")
 	
+	# Set authority for multiplayer
+	if NetworkManager.is_multiplayer_game:
+		set_multiplayer_authority(player_id)
+	
+	# Swap to player 2 model if needed
+	if player_number == 2:
+		swap_to_player2_model()
+	
 	guns = [$Gun1, $Gun2]
 	gun0 = $Gun0  # Center gun
 	main = get_tree().current_scene
@@ -70,6 +81,10 @@ func _ready():
 	find_mesh_instances(self)
 
 func _physics_process(delta: float) -> void:
+	# Only process input/physics on the authority peer
+	if NetworkManager.is_multiplayer_game and not is_multiplayer_authority():
+		return
+		
 	if not crosshair_controller:
 		return
 	
@@ -101,6 +116,10 @@ func _physics_process(delta: float) -> void:
 	# Apply velocity and move
 	self.velocity = actual_velocity
 	move_and_slide()
+	
+	# Sync position to other players
+	if NetworkManager.is_multiplayer_game and is_multiplayer_authority():
+		_sync_position.rpc(global_position, rotation)
 	
 	# Get crosshair positions to determine aim direction
 	var crosshair1 = crosshair_controller.get_node_or_null("Crosshair")
@@ -143,6 +162,16 @@ func _physics_process(delta: float) -> void:
 		bullet_cooldown -= 1
 
 func shoot_at_crosshair():
+	if not crosshair_controller:
+		return
+		
+	# In multiplayer, call shoot on all peers
+	if NetworkManager.is_multiplayer_game:
+		_shoot_at_crosshair_synced.rpc()
+	else:
+		_perform_shoot()
+
+func _perform_shoot():
 	if not crosshair_controller:
 		return
 		
@@ -199,7 +228,28 @@ func shoot_at_crosshair():
 		if direction.length() > 0:
 			bullet.look_at(bullet.global_position + direction, Vector3.UP)
 
+@rpc("any_peer", "call_local", "reliable")
+func _shoot_at_crosshair_synced():
+	# Validate that the caller has authority
+	if NetworkManager.is_multiplayer_game:
+		var sender = multiplayer.get_remote_sender_id()
+		if sender != get_multiplayer_authority() and sender != 1:
+			return
+	_perform_shoot()
+
+@rpc("unreliable_ordered")
+func _sync_position(new_position: Vector3, new_rotation: Vector3):
+	if not is_multiplayer_authority():
+		global_position = new_position
+		rotation = new_rotation
+
 func take_damage(damage: int):
+	if NetworkManager.is_multiplayer_game:
+		_take_damage_synced.rpc(damage)
+	else:
+		_apply_damage(damage)
+
+func _apply_damage(damage: int):
 	current_health -= damage
 	current_health = max(0, current_health)
 	emit_signal("health_changed", current_health, max_health)
@@ -210,7 +260,17 @@ func take_damage(damage: int):
 	if current_health <= 0:
 		die()
 
+@rpc("any_peer", "call_local", "reliable")
+func _take_damage_synced(damage: int):
+	_apply_damage(damage)
+
 func die():
+	if NetworkManager.is_multiplayer_game:
+		_die_synced.rpc()
+	else:
+		_perform_death()
+
+func _perform_death():
 	# Create explosion effect
 	var explosion = Explosion.instantiate()
 	get_parent().add_child(explosion)
@@ -223,6 +283,10 @@ func die():
 	
 	# Emit death signal
 	emit_signal("player_died")
+
+@rpc("any_peer", "call_local", "reliable")
+func _die_synced():
+	_perform_death()
 
 func respawn():
 	current_health = max_health
@@ -268,6 +332,12 @@ func restore_materials():
 			mesh_instances[i].set_surface_override_material(0, original_materials[i])
 
 func collect_pickup(pickup_type: String):
+	if NetworkManager.is_multiplayer_game:
+		_collect_pickup_synced.rpc(pickup_type)
+	else:
+		_apply_pickup(pickup_type)
+
+func _apply_pickup(pickup_type: String):
 	match pickup_type:
 		"health":
 			# Heal the player
@@ -279,3 +349,34 @@ func collect_pickup(pickup_type: String):
 			if laser_stage < 3:
 				laser_stage += 1
 				emit_signal("laser_upgraded", laser_stage)
+
+@rpc("any_peer", "call_local", "reliable")
+func _collect_pickup_synced(pickup_type: String):
+	_apply_pickup(pickup_type)
+
+func swap_to_player2_model():
+	# Load player 2 model
+	var player2_model = load("res://assets/models/player2.glb")
+	if not player2_model:
+		return
+		
+	# Find the existing MeshInstance3D node
+	var mesh_instance = get_node_or_null("MeshInstance3D")
+	if mesh_instance and player2_model.has_method("instantiate"):
+		# If it's a scene, get the mesh from it
+		var temp_instance = player2_model.instantiate()
+		var new_mesh = null
+		
+		# Find the mesh in the loaded model
+		for child in temp_instance.get_children():
+			if child is MeshInstance3D:
+				new_mesh = child.mesh
+				break
+		
+		if new_mesh:
+			mesh_instance.mesh = new_mesh
+		
+		temp_instance.queue_free()
+	elif mesh_instance:
+		# If it's a direct mesh resource
+		mesh_instance.mesh = player2_model

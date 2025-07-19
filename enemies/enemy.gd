@@ -31,8 +31,8 @@ func _ready():
 	
 	# Randomize speed
 	speed = randf_range(speed_min, speed_max)
-	# Find player reference
-	player_ref = get_tree().get_first_node_in_group("Player")
+	# Find nearest player reference
+	find_nearest_player()
 	# Start shoot timer with some randomness
 	shoot_timer = randf_range(0.5, shoot_cooldown)
 	
@@ -44,8 +44,16 @@ func _ready():
 			original_material = mesh_instance.mesh.surface_get_material(0)
 
 func _physics_process(delta: float) -> void:
+	# Only server processes enemy movement in multiplayer
+	if NetworkManager.is_multiplayer_game and not NetworkManager.is_host:
+		return
+		
 	self.velocity.z = speed
 	move_and_slide()
+	
+	# Sync position to clients
+	if NetworkManager.is_multiplayer_game:
+		_sync_enemy_position.rpc(global_position)
 	
 	# Handle hit flash
 	if hit_flash_timer > 0:
@@ -55,6 +63,9 @@ func _physics_process(delta: float) -> void:
 			mesh_instance.set_surface_override_material(0, original_material)
 	
 	# Shooting logic
+	if not player_ref or not is_instance_valid(player_ref) or not player_ref.visible:
+		find_nearest_player()
+	
 	if player_ref and is_instance_valid(player_ref):
 		shoot_timer -= delta
 		if shoot_timer <= 0.0:
@@ -67,6 +78,10 @@ func _physics_process(delta: float) -> void:
 
 func shoot_at_player():
 	if not player_ref:
+		return
+		
+	# In multiplayer, only host controls enemy shooting
+	if NetworkManager.is_multiplayer_game and not NetworkManager.is_host:
 		return
 		
 	# Create bullet
@@ -89,6 +104,12 @@ func shoot_at_player():
 		bullet.look_at(bullet.global_position + direction, Vector3.UP)
 
 func take_damage(damage: int, impact_point: Vector3 = Vector3.ZERO):
+	if NetworkManager.is_multiplayer_game:
+		_take_damage_synced.rpc(damage, impact_point)
+	else:
+		_apply_damage(damage, impact_point)
+
+func _apply_damage(damage: int, impact_point: Vector3):
 	current_health -= damage
 	
 	# Flash effect
@@ -99,6 +120,15 @@ func take_damage(damage: int, impact_point: Vector3 = Vector3.ZERO):
 	
 	if current_health <= 0:
 		die()
+
+@rpc("any_peer", "call_local", "reliable")
+func _take_damage_synced(damage: int, impact_point: Vector3):
+	_apply_damage(damage, impact_point)
+
+@rpc("unreliable")
+func _sync_enemy_position(new_position: Vector3):
+	if not NetworkManager.is_host:
+		global_position = new_position
 
 func flash_hit():
 	if mesh_instance:
@@ -118,20 +148,44 @@ func create_impact_effect(position: Vector3):
 	impact.global_position = position
 
 func die():
+	if NetworkManager.is_multiplayer_game:
+		_die_synced.rpc()
+	else:
+		_perform_death()
+
+func _perform_death():
 	# Spawn explosion at enemy position
 	var explosion = Explosion.instantiate()
 	get_parent().add_child(explosion)
 	explosion.global_position = global_position
 	
-	# Chance to spawn pickups
-	var rand = randf()
-	if rand < 0.2:  # 20% chance for laser pickup
-		spawn_pickup(LaserPickup)
-	elif rand < 0.4:  # 20% chance for health pickup (0.2 + 0.2 = 0.4)
-		spawn_pickup(HealthPickup)
+	# Only host spawns pickups in multiplayer
+	if not NetworkManager.is_multiplayer_game or NetworkManager.is_host:
+		# Chance to spawn pickups
+		var rand = randf()
+		if rand < 0.2:  # 20% chance for laser pickup
+			spawn_pickup(LaserPickup)
+		elif rand < 0.4:  # 20% chance for health pickup (0.2 + 0.2 = 0.4)
+			spawn_pickup(HealthPickup)
 	
 	# Remove the enemy
 	queue_free()
+
+@rpc("any_peer", "call_local", "reliable")
+func _die_synced():
+	_perform_death()
+
+func find_nearest_player():
+	var players = get_tree().get_nodes_in_group("Player")
+	var nearest_distance = INF
+	player_ref = null
+	
+	for player in players:
+		if player.visible and is_instance_valid(player):
+			var distance = global_position.distance_to(player.global_position)
+			if distance < nearest_distance:
+				nearest_distance = distance
+				player_ref = player
 
 func spawn_pickup(pickup_scene: PackedScene):
 	var pickup = pickup_scene.instantiate()
