@@ -8,6 +8,7 @@
 size = Vector3(1, 0.675964, 1)
 
 [node name="player" type="CharacterBody3D"]
+transform = Transform3D(3.5, 0, 0, 0, 3.5, 0, 0, 0, 3.5, 0, 0, 0)
 script = ExtResource("1_4flbx")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]

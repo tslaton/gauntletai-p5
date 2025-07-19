@@ -20,9 +20,8 @@ func _ready():
 	if mars_dust:
 		Global.mars_dust_effect = mars_dust
 	
-	# Add game over UI
+	# Add game over UI - will be added later after viewports are setup
 	game_over_ui = GameOverScene.instantiate()
-	add_child(game_over_ui)
 	game_over_ui.retry_pressed.connect(_on_retry_pressed)
 	game_over_ui.quit_pressed.connect(_on_quit_pressed)
 	
@@ -35,6 +34,12 @@ func _ready():
 	# Connect to network events for handling disconnections
 	if NetworkManager.is_multiplayer_game:
 		NetworkManager.player_disconnected.connect(_on_player_disconnected)
+	
+	# Add game over UI as overlay (on top of viewports)
+	add_child(game_over_ui)
+	# Ensure it's on top
+	game_over_ui.z_index = 100
+	game_over_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 func setup_singleplayer():
 	# Use existing player in the scene
@@ -209,8 +214,10 @@ func _input(event):
 			get_tree().paused = !get_tree().paused
 
 func _on_player_died(peer_id: int):
+	print("Player died: ", peer_id)
 	# Remove from alive players list
 	alive_players.erase(peer_id)
+	print("Alive players: ", alive_players)
 	
 	# In single player, show game over immediately
 	if not NetworkManager.is_multiplayer_game:
@@ -220,9 +227,13 @@ func _on_player_died(peer_id: int):
 	
 	# In multiplayer, check if all players are dead
 	if alive_players.is_empty():
-		# All players dead - game over
+		print("All players dead - showing game over")
+		# All players dead - game over for everyone
 		await get_tree().create_timer(1.0).timeout
-		game_over_ui.show_game_over()
+		if NetworkManager.is_host:
+			_show_game_over_all.rpc()
+		else:
+			game_over_ui.show_game_over()
 	else:
 		# Switch dead player's camera to spectate the alive player
 		var alive_player_id = alive_players[0]
@@ -261,9 +272,14 @@ func _on_player_disconnected(peer_id: int):
 func _on_retry_pressed():
 	# Reload the current scene
 	if NetworkManager.is_multiplayer_game:
-		# In multiplayer, only host can restart
 		if NetworkManager.is_host:
+			# Host can restart for everyone
 			_restart_game.rpc()
+		else:
+			# Non-host disconnects and goes to main menu
+			get_tree().paused = false
+			NetworkManager.disconnect_from_game()
+			get_tree().change_scene_to_file("res://ui/main_menu.tscn")
 	else:
 		get_tree().reload_current_scene()
 
@@ -271,9 +287,31 @@ func _on_retry_pressed():
 func _restart_game():
 	get_tree().reload_current_scene()
 
+@rpc("authority", "call_local", "reliable")
+func _show_game_over_all():
+	print("Showing game over UI for all players")
+	game_over_ui.show_game_over()
+
 func _on_quit_pressed():
 	if NetworkManager.is_multiplayer_game:
-		NetworkManager.disconnect_from_game()
-		get_tree().change_scene_to_file("res://ui/main_menu.tscn")
+		if NetworkManager.is_host:
+			# Host quitting ends the game for everyone
+			_notify_game_ending.rpc()
+			await get_tree().create_timer(0.1).timeout
+			get_tree().quit()
+		else:
+			# Non-host just disconnects and returns to menu
+			get_tree().paused = false
+			NetworkManager.disconnect_from_game()
+			get_tree().change_scene_to_file("res://ui/main_menu.tscn")
 	else:
 		get_tree().quit()
+
+@rpc("authority", "call_local", "reliable")
+func _notify_game_ending():
+	# Show a message or just quit
+	get_tree().paused = false
+	if not NetworkManager.is_host:
+		# Non-host clients return to main menu when host quits
+		NetworkManager.disconnect_from_game()
+		get_tree().change_scene_to_file("res://ui/main_menu.tscn")
