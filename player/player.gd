@@ -64,6 +64,7 @@ func _ready():
 		print("Setting multiplayer authority for player_id: ", player_id, " on peer: ", multiplayer.get_unique_id())
 		set_multiplayer_authority(player_id)
 		print("Authority set. is_multiplayer_authority(): ", is_multiplayer_authority())
+		print("Player ", player_id, " authority: ", get_multiplayer_authority())
 	
 	
 	guns = [$Gun1, $Gun2]
@@ -288,6 +289,7 @@ func _shoot_at_crosshair_synced(gun_positions: Array, target_pos: Vector3, damag
 
 @rpc("unreliable_ordered")
 func _sync_position(new_position: Vector3, new_rotation: Vector3):
+	# Only apply position updates from the authoritative player
 	if not is_multiplayer_authority():
 		global_position = new_position
 		rotation = new_rotation

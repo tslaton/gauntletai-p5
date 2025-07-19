@@ -106,8 +106,14 @@ func setup_multiplayer():
 	
 	# After all players are spawned, create health displays
 	if player_ids.size() == 2:
-		# Small delay to ensure players are initialized
+		# Small delay to ensure players are fully initialized
 		await get_tree().process_frame
+		
+		# Debug: Check what players exist
+		print("Players in group after spawning: ")
+		for p in get_tree().get_nodes_in_group("Player"):
+			print("  - ", p.name, " at position ", p.global_position)
+		
 		create_multiplayer_health_displays()
 
 func setup_split_screen():
@@ -162,8 +168,14 @@ func spawn_player(peer_id: int, player_number: int):
 		else:
 			player.position.x = 3
 	
-	# Add player to scene
+	# Add player to scene BEFORE setting authority
 	add_child(player)
+	
+	# Ensure multiplayer authority is properly set after being in tree
+	if NetworkManager.is_multiplayer_game:
+		# The player's _ready function already sets authority, but we ensure it here too
+		player.set_multiplayer_authority(peer_id)
+		print("Set authority for player ", peer_id, " after adding to tree. Authority: ", player.get_multiplayer_authority())
 	
 	# Connect death signal
 	player.player_died.connect(_on_player_died.bind(peer_id))
@@ -185,10 +197,12 @@ func spawn_player(peer_id: int, player_number: int):
 	# In multiplayer, local player always uses viewport 1, remote player uses viewport 2
 	if NetworkManager.is_multiplayer_game and viewports.size() > 0:
 		var viewport_index = 1 if peer_id == NetworkManager.local_player_id else 2
-		if viewports.has(viewport_index):
+		print("Adding camera/crosshair for peer ", peer_id, " to viewport ", viewport_index, " (local_player_id: ", NetworkManager.local_player_id, ")")
+		if viewports.has(viewport_index) and viewports[viewport_index] != null:
 			viewports[viewport_index].add_child(camera)
 			viewports[viewport_index].add_child(crosshair_controller)
 		else:
+			print("WARNING: Viewport ", viewport_index, " not found or null, adding to main scene")
 			add_child(camera)
 			add_child(crosshair_controller)
 	else:
@@ -324,8 +338,19 @@ func _restart_game():
 	get_tree().paused = false
 	
 	# Clear existing game objects
+	# First, clear all nodes from the Player group
+	for player_node in get_tree().get_nodes_in_group("Player"):
+		print("Removing player from group: ", player_node.name)
+		player_node.remove_from_group("Player")
+		player_node.queue_free()
+	
+	# Also remove any existing player nodes by name to ensure cleanup
+	for child in get_children():
+		if (child.name.begins_with("Player") or child.name == "player") and child.has_method("take_damage"):
+			child.queue_free()
+	
 	for player_id in players:
-		if players[player_id]:
+		if players[player_id] and is_instance_valid(players[player_id]):
 			players[player_id].queue_free()
 	players.clear()
 	
@@ -344,11 +369,11 @@ func _restart_game():
 			health_displays[hd_id].queue_free()
 	health_displays.clear()
 	
-	# Also clear any health displays in viewports
+	# Also clear any nodes in viewports
 	for viewport_id in viewports:
 		if viewports[viewport_id]:
 			for child in viewports[viewport_id].get_children():
-				if child.name.begins_with("HealthDisplay"):
+				if child.name.begins_with("HealthDisplay") or child.name.begins_with("Camera") or child.name.begins_with("CrosshairController"):
 					child.queue_free()
 	
 	# Clear viewports if in multiplayer
@@ -381,8 +406,17 @@ func _restart_game():
 	else:
 		game_over_ui.visible = false
 	
-	# Wait a frame for cleanup
+	# Wait multiple frames for cleanup to ensure nodes are fully freed
 	await get_tree().process_frame
+	await get_tree().process_frame
+	
+	# Double-check that all players are gone
+	var remaining_players = get_tree().get_nodes_in_group("Player")
+	if remaining_players.size() > 0:
+		print("WARNING: Still have players after cleanup: ", remaining_players)
+		for p in remaining_players:
+			p.queue_free()
+		await get_tree().process_frame
 	
 	# Reinitialize the game
 	if NetworkManager.is_multiplayer_game:
