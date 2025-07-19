@@ -4,6 +4,7 @@ var MarsDustScene = preload("res://fx/mars_dust.tscn")
 var HealthDisplayScene = preload("res://ui/health_display.tscn")
 var GameOverScene = preload("res://ui/game_over.tscn")
 var PlayerScene = preload("res://player/player.tscn")
+var Player2Scene = preload("res://player/player2.tscn")
 
 var game_over_ui: Control
 var players = {}  # Dictionary to store player instances by peer ID
@@ -84,10 +85,12 @@ func setup_multiplayer():
 	if player_ids.size() == 2:
 		setup_split_screen()
 	
-	# Spawn each player
+	# Spawn each player - host is always player 1
 	for i in range(player_ids.size()):
 		var peer_id = player_ids[i]
-		spawn_player(peer_id, i + 1)
+		# Determine player number based on whether they're the host
+		var player_number = 1 if peer_id == 1 else 2
+		spawn_player(peer_id, player_number)
 
 func setup_split_screen():
 	# Create two viewport containers for split screen
@@ -122,8 +125,9 @@ func setup_split_screen():
 	viewports[2] = right_viewport
 
 func spawn_player(peer_id: int, player_number: int):
-	# Create player instance
-	var player = PlayerScene.instantiate()
+	# Create player instance - use Player2Scene for second player
+	var player_scene_to_use = PlayerScene if player_number == 1 else Player2Scene
+	var player = player_scene_to_use.instantiate()
 	player.name = "Player" + str(peer_id)
 	player.player_id = peer_id
 	player.player_number = player_number
@@ -159,9 +163,15 @@ func spawn_player(peer_id: int, player_number: int):
 	crosshair_controller.position.y = Global.DEFAULT_FLYING_HEIGHT
 	
 	# Add to appropriate viewport or main scene
-	if NetworkManager.is_multiplayer_game and viewports.has(player_number):
-		viewports[player_number].add_child(camera)
-		viewports[player_number].add_child(crosshair_controller)
+	# In multiplayer, local player always uses viewport 1, remote player uses viewport 2
+	if NetworkManager.is_multiplayer_game and viewports.size() > 0:
+		var viewport_index = 1 if peer_id == NetworkManager.local_player_id else 2
+		if viewports.has(viewport_index):
+			viewports[viewport_index].add_child(camera)
+			viewports[viewport_index].add_child(crosshair_controller)
+		else:
+			add_child(camera)
+			add_child(crosshair_controller)
 	else:
 		add_child(camera)
 		add_child(crosshair_controller)
@@ -174,20 +184,18 @@ func spawn_player(peer_id: int, player_number: int):
 	
 	# Create health display for this player
 	var health_display = HealthDisplayScene.instantiate()
-	if NetworkManager.is_multiplayer_game and viewports.has(player_number):
-		viewports[player_number].add_child(health_display)
+	if NetworkManager.is_multiplayer_game and viewports.size() > 0:
+		var viewport_index = 1 if peer_id == NetworkManager.local_player_id else 2
+		if viewports.has(viewport_index):
+			viewports[viewport_index].add_child(health_display)
+		else:
+			add_child(health_display)
 	else:
 		add_child(health_display)
 	health_displays[peer_id] = health_display
 	
 	# Set the player to track for health display
 	health_display.set_tracked_player(player, peer_id)
-	
-	# Make player 2 use the second ship model
-	if player_number == 2:
-		# This would need to be implemented in the player scene
-		# by swapping the mesh or loading a different model
-		pass
 
 func _input(event):
 	# Toggle Mars dust with 'M' key

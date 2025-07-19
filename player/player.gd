@@ -63,9 +63,6 @@ func _ready():
 	if NetworkManager.is_multiplayer_game:
 		set_multiplayer_authority(player_id)
 	
-	# Swap to player 2 model if needed
-	if player_number == 2:
-		swap_to_player2_model()
 	
 	guns = [$Gun1, $Gun2]
 	gun0 = $Gun0  # Center gun
@@ -353,30 +350,3 @@ func _apply_pickup(pickup_type: String):
 @rpc("any_peer", "call_local", "reliable")
 func _collect_pickup_synced(pickup_type: String):
 	_apply_pickup(pickup_type)
-
-func swap_to_player2_model():
-	# Load player 2 model
-	var player2_model = load("res://assets/models/player2.glb")
-	if not player2_model:
-		return
-		
-	# Find the existing MeshInstance3D node
-	var mesh_instance = get_node_or_null("MeshInstance3D")
-	if mesh_instance and player2_model.has_method("instantiate"):
-		# If it's a scene, get the mesh from it
-		var temp_instance = player2_model.instantiate()
-		var new_mesh = null
-		
-		# Find the mesh in the loaded model
-		for child in temp_instance.get_children():
-			if child is MeshInstance3D:
-				new_mesh = child.mesh
-				break
-		
-		if new_mesh:
-			mesh_instance.mesh = new_mesh
-		
-		temp_instance.queue_free()
-	elif mesh_instance:
-		# If it's a direct mesh resource
-		mesh_instance.mesh = player2_model
