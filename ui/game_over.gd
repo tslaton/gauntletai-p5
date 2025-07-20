@@ -13,12 +13,25 @@ func show_game_over():
 	get_tree().paused = true
 	# Make sure the UI can process input while paused
 	process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	
+	# Hide retry button for non-host players in multiplayer
+	if NetworkManager.is_multiplayer_game and not NetworkManager.is_host:
+		$Panel/VBoxContainer/RetryButton.visible = false
+		# Change quit button text to be clearer
+		$Panel/VBoxContainer/QuitButton.text = "Leave Game"
+	else:
+		$Panel/VBoxContainer/RetryButton.visible = true
+		$Panel/VBoxContainer/QuitButton.text = "Quit"
 
 func _on_retry_pressed():
 	get_tree().paused = false
 	emit_signal("retry_pressed")
 	visible = false
+	
+func hide_game_over():
+	visible = false
+	get_tree().paused = false
 
 func _on_quit_pressed():
 	emit_signal("quit_pressed")
-	get_tree().quit()
+	# Don't quit directly - let main.gd handle it based on multiplayer state

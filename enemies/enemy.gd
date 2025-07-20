@@ -21,6 +21,7 @@ var mesh_instance: MeshInstance3D
 var original_material: Material
 var hit_flash_timer: float = 0.0
 const HIT_FLASH_DURATION: float = 0.1
+var is_dying: bool = false
 
 func _ready():
 	# Add to enemies group
@@ -31,8 +32,8 @@ func _ready():
 	
 	# Randomize speed
 	speed = randf_range(speed_min, speed_max)
-	# Find player reference
-	player_ref = get_tree().get_first_node_in_group("Player")
+	# Find nearest player reference
+	find_nearest_player()
 	# Start shoot timer with some randomness
 	shoot_timer = randf_range(0.5, shoot_cooldown)
 	
@@ -44,8 +45,16 @@ func _ready():
 			original_material = mesh_instance.mesh.surface_get_material(0)
 
 func _physics_process(delta: float) -> void:
+	# Only server processes enemy movement in multiplayer
+	if NetworkManager.is_multiplayer_game and not NetworkManager.is_host:
+		return
+		
 	self.velocity.z = speed
 	move_and_slide()
+	
+	# Sync position to clients
+	if NetworkManager.is_multiplayer_game:
+		_sync_enemy_position.rpc(global_position)
 	
 	# Handle hit flash
 	if hit_flash_timer > 0:
@@ -55,6 +64,9 @@ func _physics_process(delta: float) -> void:
 			mesh_instance.set_surface_override_material(0, original_material)
 	
 	# Shooting logic
+	if not player_ref or not is_instance_valid(player_ref) or not player_ref.visible:
+		find_nearest_player()
+	
 	if player_ref and is_instance_valid(player_ref):
 		shoot_timer -= delta
 		if shoot_timer <= 0.0:
@@ -69,26 +81,46 @@ func shoot_at_player():
 	if not player_ref:
 		return
 		
-	# Create bullet
-	var bullet = EnemyBullet.instantiate()
-	get_parent().add_child(bullet)
-	bullet.global_position = global_position
+	# In multiplayer, only host controls enemy shooting
+	if NetworkManager.is_multiplayer_game and not NetworkManager.is_host:
+		return
 	
 	# Calculate direction to player with some prediction
 	var player_pos = player_ref.global_position
 	var direction = (player_pos - global_position).normalized()
 	
+	if NetworkManager.is_multiplayer_game:
+		_spawn_enemy_bullet_synced.rpc(global_position, direction, bullet_speed, damage)
+	else:
+		_spawn_enemy_bullet(global_position, direction, bullet_speed, damage)
+
+func _spawn_enemy_bullet(spawn_pos: Vector3, direction: Vector3, speed: float, dmg: int):
+	# Create bullet
+	var bullet = EnemyBullet.instantiate()
+	get_parent().add_child(bullet)
+	bullet.global_position = spawn_pos
+	
 	# Set bullet velocity toward player
-	bullet.velocity = direction * bullet_speed
+	bullet.velocity = direction * speed
 	
 	# Store damage value in bullet metadata
-	bullet.set_meta("damage", damage)
+	bullet.set_meta("damage", dmg)
 	
 	# Orient bullet to face direction
 	if direction.length() > 0:
 		bullet.look_at(bullet.global_position + direction, Vector3.UP)
 
+@rpc("authority", "call_local", "reliable")
+func _spawn_enemy_bullet_synced(spawn_pos: Vector3, direction: Vector3, speed: float, dmg: int):
+	_spawn_enemy_bullet(spawn_pos, direction, speed, dmg)
+
 func take_damage(damage: int, impact_point: Vector3 = Vector3.ZERO):
+	if NetworkManager.is_multiplayer_game:
+		_take_damage_synced.rpc(damage, impact_point)
+	else:
+		_apply_damage(damage, impact_point)
+
+func _apply_damage(damage: int, impact_point: Vector3):
 	current_health -= damage
 	
 	# Flash effect
@@ -99,6 +131,15 @@ func take_damage(damage: int, impact_point: Vector3 = Vector3.ZERO):
 	
 	if current_health <= 0:
 		die()
+
+@rpc("any_peer", "call_local", "reliable")
+func _take_damage_synced(damage: int, impact_point: Vector3):
+	_apply_damage(damage, impact_point)
+
+@rpc("unreliable")
+func _sync_enemy_position(new_position: Vector3):
+	if not NetworkManager.is_host:
+		global_position = new_position
 
 func flash_hit():
 	if mesh_instance:
@@ -118,25 +159,81 @@ func create_impact_effect(position: Vector3):
 	impact.global_position = position
 
 func die():
+	if is_dying:
+		return
+	
+	if NetworkManager.is_multiplayer_game:
+		_die_synced.rpc()
+	else:
+		is_dying = true
+		_perform_death()
+
+func _perform_death():
 	# Spawn explosion at enemy position
 	var explosion = Explosion.instantiate()
 	get_parent().add_child(explosion)
 	explosion.global_position = global_position
 	
-	# Chance to spawn pickups
-	var rand = randf()
-	if rand < 0.2:  # 20% chance for laser pickup
-		spawn_pickup(LaserPickup)
-	elif rand < 0.4:  # 20% chance for health pickup (0.2 + 0.2 = 0.4)
-		spawn_pickup(HealthPickup)
+	# Only host decides pickups in multiplayer
+	if not NetworkManager.is_multiplayer_game or NetworkManager.is_host:
+		# Chance to spawn pickups - only one pickup per enemy
+		var rand = randf()
+		if rand < 0.15:  # 15% chance for laser pickup
+			if NetworkManager.is_multiplayer_game:
+				_spawn_pickup_synced.rpc("laser", global_position)
+			else:
+				spawn_pickup(LaserPickup)
+		elif rand < 0.3:  # 15% chance for health pickup (0.15 + 0.15 = 0.3)
+			if NetworkManager.is_multiplayer_game:
+				_spawn_pickup_synced.rpc("health", global_position)
+			else:
+				spawn_pickup(HealthPickup)
+		# else: 70% chance for no pickup
+	
+	# Small delay before removing to ensure RPC is sent
+	if NetworkManager.is_multiplayer_game:
+		await get_tree().create_timer(0.1).timeout
 	
 	# Remove the enemy
 	queue_free()
 
+@rpc("any_peer", "call_local", "reliable")
+func _die_synced():
+	if is_dying:
+		return
+	is_dying = true
+	_perform_death()
+
+func find_nearest_player():
+	var players = get_tree().get_nodes_in_group("Player")
+	var nearest_distance = INF
+	player_ref = null
+	
+	for player in players:
+		if player.visible and is_instance_valid(player):
+			var distance = global_position.distance_to(player.global_position)
+			if distance < nearest_distance:
+				nearest_distance = distance
+				player_ref = player
+
 func spawn_pickup(pickup_scene: PackedScene):
 	var pickup = pickup_scene.instantiate()
+	
+	# Add to parent (which should be main scene) for visibility in all viewports
 	get_parent().add_child(pickup)
+		
 	pickup.global_position = global_position
 	
 	# Continue enemy's trajectory toward player
+	pickup.velocity = Vector3(0, 0, speed)
+
+@rpc("authority", "call_local", "reliable")
+func _spawn_pickup_synced(pickup_type: String, spawn_position: Vector3):
+	var pickup_scene = LaserPickup if pickup_type == "laser" else HealthPickup
+	var pickup = pickup_scene.instantiate()
+	
+	# Add to parent (which should be main scene) for visibility in all viewports
+	get_parent().add_child(pickup)
+		
+	pickup.global_position = spawn_position
 	pickup.velocity = Vector3(0, 0, speed)

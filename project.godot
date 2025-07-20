@@ -11,19 +11,19 @@ config_version=5
 [application]
 
 config/name="rail_shooter"
-run/main_scene="uid://tajadoja5alj"
+run/main_scene="res://ui/main_menu.tscn"
 config/features=PackedStringArray("4.4", "Forward Plus")
 config/icon="res://assets/icon.svg"
 
 [autoload]
 
 Global="*res://Global.gd"
+NetworkManager="*res://NetworkManager.gd"
 
 [display]
 
 window/size/viewport_width=3456
 window/size/viewport_height=2234
-window/size/mode=3
 
 [editor_plugins]
 
