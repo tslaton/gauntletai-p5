@@ -9,6 +9,10 @@ var velocity: Vector3 = Vector3.ZERO
 func _ready():
 	add_to_group("Pickups")
 	body_entered.connect(_on_body_entered)
+	
+	# Set collision layers: Pickups are on layer 5 (same as enemy bullets)
+	collision_layer = 16  # Only on layer 5 (bit 5)
+	collision_mask = 2  # Only detect Player (bit 2)
 
 func _physics_process(delta: float) -> void:
 	# Move forward

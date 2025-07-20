@@ -3,7 +3,8 @@
     "allow": [
       "Bash(find:*)",
       "WebFetch(domain:docs.godotengine.org)",
-      "WebFetch(domain:godotengine.org)"
+      "WebFetch(domain:godotengine.org)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

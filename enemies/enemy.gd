@@ -27,6 +27,10 @@ func _ready():
 	# Add to enemies group
 	add_to_group("Enemies")
 	
+	# Set collision layers: Enemy is on layer 3
+	collision_layer = 4  # Only on Enemy layer (bit 3)
+	collision_mask = 8  # Only collide with PlayerBullet (bit 4)
+	
 	# Initialize health
 	current_health = max_health
 	

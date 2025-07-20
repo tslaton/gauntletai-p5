@@ -23,8 +23,9 @@ const BULLET_SPEED = -600         # negative: toward player
 const BULLET_COOLDOWN = 8         # frames
 
 # Health system
-@export var max_health: int = 100
-@export var current_health: int = 100
+@export var max_health: int = 10000
+@export var current_health: int = 10000
+
 @export var bullet_damage: int = 10  # Damage dealt by player bullets
 signal health_changed(new_health: int, max_health: int)
 signal player_died()
@@ -58,6 +59,10 @@ var Explosion = load("res://fx/explosion.tscn")
 func _ready():
 	# Add player to Player group for enemy targeting
 	add_to_group("Player")
+	
+	# Set collision layers: Player is on layer 2
+	collision_layer = 2  # Only on Player layer (bit 2)
+	collision_mask = 1 + 16  # Collide with World (bit 1) and EnemyBullet (bit 5)
 	
 	# Set authority for multiplayer
 	if NetworkManager.is_multiplayer_game:
