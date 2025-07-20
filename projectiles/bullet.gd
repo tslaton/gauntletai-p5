@@ -24,10 +24,13 @@ func _physics_process(delta: float) -> void:
 func _on_area_3d_body_entered(body: Node3D) -> void:
 	# check for a hit, then recylce the bullet and enemy
 	if body.is_in_group("Enemies"):
+		# Get the shooter from metadata
+		var shooter = get_meta("shooter", null)
+		
 		if body.has_method("take_damage"):
 			# Get damage amount from bullet metadata
 			var damage = get_meta("damage", 10) # Default 10 if not set
-			body.take_damage(damage, global_position)
+			body.take_damage(damage, global_position, shooter)
 		elif body.has_method("die"):
 			body.die()
 		else:

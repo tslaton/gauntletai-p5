@@ -2,6 +2,7 @@ extends Node3D
 
 var MarsDustScene = preload("res://fx/mars_dust.tscn")
 var HealthDisplayScene = preload("res://ui/health_display.tscn")
+var ScoreDisplayScene = preload("res://ui/score_display.tscn")
 var GameOverScene = preload("res://ui/game_over.tscn")
 var PlayerScene = preload("res://player/player.tscn")
 var Player2Scene = preload("res://player/player2.tscn")
@@ -10,6 +11,7 @@ var game_over_ui: Control
 var players = {}  # Dictionary to store player instances by peer ID
 var cameras = {}  # Dictionary to store cameras by peer ID
 var health_displays = {}  # Dictionary to store health displays by peer ID
+var score_displays = {}  # Dictionary to store score displays by peer ID
 var crosshair_controllers = {}  # Dictionary to store crosshair controllers
 var alive_players = []  # Track which players are still alive
 
@@ -72,6 +74,11 @@ func setup_singleplayer():
 	var health_display = HealthDisplayScene.instantiate()
 	add_child(health_display)
 	health_displays[1] = health_display
+	
+	# Add score display UI
+	var score_display = ScoreDisplayScene.instantiate()
+	add_child(score_display)
+	score_displays[1] = score_display
 
 func setup_multiplayer():
 	# Remove the default player from the scene if it exists
@@ -104,6 +111,7 @@ func setup_multiplayer():
 		# Small delay to ensure players are fully initialized
 		await get_tree().process_frame
 		create_multiplayer_health_displays()
+		create_multiplayer_score_displays()
 
 
 func spawn_player(peer_id: int, player_number: int):
@@ -170,6 +178,12 @@ func spawn_player(peer_id: int, player_number: int):
 		add_child(health_display)
 		health_displays[peer_id] = health_display
 		health_display.set_tracked_player(player, peer_id)
+		
+		# Single player score display
+		var score_display = ScoreDisplayScene.instantiate()
+		add_child(score_display)
+		score_displays[peer_id] = score_display
+		score_display.set_tracked_player(player, peer_id)
 
 func create_multiplayer_health_displays():
 	# Create health displays for all players
@@ -191,6 +205,28 @@ func create_multiplayer_health_displays():
 			health_display.set_tracked_player(player_to_track, pid)
 		
 		# Move y_offset down for next health display
+		y_offset += 40
+
+func create_multiplayer_score_displays():
+	# Create score displays for all players on the right side
+	var player_ids = NetworkManager.get_player_ids()
+	player_ids.sort() # Ensure consistent order (player 1 first)
+	
+	var y_offset = 10
+	for i in range(player_ids.size()):
+		var pid = player_ids[i]
+		var score_display = ScoreDisplayScene.instantiate()
+		score_display.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+		score_display.position = Vector2(-300, y_offset)  # Negative offset from right
+		add_child(score_display)
+		score_displays[pid] = score_display
+		
+		# Find the player to track
+		var player_to_track = players.get(pid)
+		if player_to_track:
+			score_display.set_tracked_player(player_to_track, pid)
+		
+		# Move y_offset down for next score display
 		y_offset += 40
 
 func _input(event):
@@ -249,6 +285,10 @@ func _on_player_disconnected(peer_id: int):
 	if health_displays.has(peer_id):
 		health_displays[peer_id].queue_free()
 		health_displays.erase(peer_id)
+	
+	if score_displays.has(peer_id):
+		score_displays[peer_id].queue_free()
+		score_displays.erase(peer_id)
 	
 	alive_players.erase(peer_id)
 	
@@ -309,9 +349,20 @@ func _restart_game():
 			hd.queue_free()
 	health_displays.clear()
 	
+	# Clear all score displays
+	for sd in score_displays.values():
+		if sd and is_instance_valid(sd):
+			sd.queue_free()
+	score_displays.clear()
+	
 	# Also clear any remaining health displays by name
 	for child in get_children():
 		if child.name.begins_with("HealthDisplay"):
+			child.queue_free()
+			
+	# Also clear any remaining score displays by name
+	for child in get_children():
+		if child.name.begins_with("ScoreDisplay"):
 			child.queue_free()
 	
 	

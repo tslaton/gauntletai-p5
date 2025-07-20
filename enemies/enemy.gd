@@ -149,13 +149,15 @@ func _spawn_enemy_bullet(spawn_pos: Vector3, direction: Vector3, speed: float, d
 func _spawn_enemy_bullet_synced(spawn_pos: Vector3, direction: Vector3, speed: float, dmg: int):
 	_spawn_enemy_bullet(spawn_pos, direction, speed, dmg)
 
-func take_damage(damage: int, impact_point: Vector3 = Vector3.ZERO):
+func take_damage(damage: int, impact_point: Vector3 = Vector3.ZERO, shooter: Node3D = null):
 	if NetworkManager.is_multiplayer_game:
-		_take_damage_synced.rpc(damage, impact_point)
+		var shooter_path = shooter.get_path() if shooter else ""
+		_take_damage_synced.rpc(damage, impact_point, shooter_path)
 	else:
-		_apply_damage(damage, impact_point)
+		_apply_damage(damage, impact_point, shooter)
 
-func _apply_damage(damage: int, impact_point: Vector3):
+func _apply_damage(damage: int, impact_point: Vector3, shooter: Node3D = null):
+	var was_alive = current_health > 0
 	current_health -= damage
 	
 	# Flash effect
@@ -164,12 +166,18 @@ func _apply_damage(damage: int, impact_point: Vector3):
 	# Create impact effect at hit location
 	create_impact_effect(impact_point if impact_point != Vector3.ZERO else global_position)
 	
-	if current_health <= 0:
+	if current_health <= 0 and was_alive:
+		# Award points to the shooter
+		if shooter and shooter.has_method("add_score"):
+			shooter.add_score(20)
 		die()
 
 @rpc("any_peer", "call_local", "reliable")
-func _take_damage_synced(damage: int, impact_point: Vector3):
-	_apply_damage(damage, impact_point)
+func _take_damage_synced(damage: int, impact_point: Vector3, shooter_path: String):
+	var shooter = null
+	if shooter_path != "":
+		shooter = get_node_or_null(shooter_path)
+	_apply_damage(damage, impact_point, shooter)
 
 @rpc("unreliable")
 func _sync_enemy_position(new_position: Vector3):
@@ -238,6 +246,9 @@ func _die_synced():
 		return
 	is_dying = true
 	_perform_death()
+
+func get_health() -> int:
+	return current_health
 
 func select_target_player():
 	var players = get_tree().get_nodes_in_group("Player")

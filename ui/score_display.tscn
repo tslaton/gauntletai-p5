@@ -1,0 +1,23 @@
+[gd_scene load_steps=3 format=3 uid="uid://score_display"]
+
+[ext_resource type="Script" path="res://ui/score_display.gd" id="1_score_display"]
+
+[sub_resource type="LabelSettings" id="LabelSettings_1"]
+font_size = 32
+outline_size = 2
+outline_color = Color(0, 0, 0, 1)
+
+[node name="ScoreDisplay" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("1_score_display")
+
+[node name="ScoreLabel" type="Label" parent="."]
+anchor_left = 0.7
+anchor_top = 0.02
+anchor_right = 0.98
+anchor_bottom = 0.1
+text = "Score: 0"
+label_settings = SubResource("LabelSettings_1")
+horizontal_alignment = 2

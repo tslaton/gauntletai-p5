@@ -30,6 +30,10 @@ const BULLET_COOLDOWN = 8         # frames
 signal health_changed(new_health: int, max_health: int)
 signal player_died()
 
+# Score system
+var score: int = 0
+signal score_changed(new_score: int)
+
 # Weapon system
 var laser_stage: float = 1.0  # Current laser upgrade level (1-3, can be 0.5 increments in multiplayer)
 signal laser_upgraded(new_stage: float)
@@ -267,6 +271,8 @@ func _perform_shoot():
 		
 		# Store damage value in bullet metadata
 		bullet.set_meta("damage", damage_to_apply)
+		# Store shooter reference
+		bullet.set_meta("shooter", self)
 		
 		# Calculate direction from gun to the target position
 		var direction = (target_pos - gun_pos).normalized()
@@ -300,6 +306,15 @@ func _shoot_at_crosshair_synced(gun_positions: Array, target_pos: Vector3, damag
 		
 		# Store damage value in bullet metadata
 		bullet.set_meta("damage", damage)
+		# Store shooter reference - find the authoritative player
+		var shooter = self
+		if NetworkManager.is_multiplayer_game:
+			# In multiplayer, find the player that initiated the shot
+			for player in get_tree().get_nodes_in_group("Player"):
+				if player.get_multiplayer_authority() == get_multiplayer_authority():
+					shooter = player
+					break
+		bullet.set_meta("shooter", shooter)
 		
 		# Calculate direction from gun to the target position
 		var direction = (target_pos - gun_pos).normalized()
@@ -371,6 +386,8 @@ func _die_synced():
 func respawn():
 	current_health = max_health
 	emit_signal("health_changed", current_health, max_health)
+	score = 0
+	emit_signal("score_changed", score)
 	# Reset position to starting position
 	position = Vector3(0, Global.DEFAULT_FLYING_HEIGHT, -11)
 	# Make visible and re-enable processing
@@ -461,3 +478,25 @@ func _apply_pickup(pickup_type: String):
 func _collect_pickup_synced(pickup_type: String):
 	# Only apply pickup for non-calling clients
 	_apply_pickup(pickup_type)
+
+func add_score(points: int):
+	if NetworkManager.is_multiplayer_game:
+		# WORKAROUND: Player 2's kills are double-applied, so player 2 adds half points
+		if player_number == 2:
+			points = points / 2
+		_add_score_synced.rpc(points)
+	else:
+		_apply_score(points)
+
+func _apply_score(points: int):
+	score += points
+	emit_signal("score_changed", score)
+
+@rpc("any_peer", "call_local", "reliable")
+func _add_score_synced(points: int):
+	# Validate that the caller has authority
+	if NetworkManager.is_multiplayer_game:
+		var sender = multiplayer.get_remote_sender_id()
+		if sender != get_multiplayer_authority() and sender != 1:
+			return
+	_apply_score(points)
