@@ -41,8 +41,8 @@ func _ready():
 	
 	# Randomize speed
 	speed = randf_range(speed_min, speed_max)
-	# Find nearest player reference
-	find_nearest_player()
+	# Select target player
+	select_target_player()
 	# Start shoot timer with some randomness
 	shoot_timer = randf_range(0.5, shoot_cooldown)
 	
@@ -74,7 +74,7 @@ func _physics_process(delta: float) -> void:
 	
 	# Shooting logic
 	if not player_ref or not is_instance_valid(player_ref) or not player_ref.visible:
-		find_nearest_player()
+		select_target_player()
 	
 	if player_ref and is_instance_valid(player_ref):
 		# Handle burst firing
@@ -232,17 +232,49 @@ func _die_synced():
 	is_dying = true
 	_perform_death()
 
-func find_nearest_player():
+func select_target_player():
 	var players = get_tree().get_nodes_in_group("Player")
-	var nearest_distance = INF
-	player_ref = null
+	var valid_players = []
+	var distances = []
 	
+	# Get all valid players and their distances
 	for player in players:
 		if player.visible and is_instance_valid(player):
 			var distance = global_position.distance_to(player.global_position)
-			if distance < nearest_distance:
-				nearest_distance = distance
-				player_ref = player
+			valid_players.append(player)
+			distances.append(distance)
+	
+	if valid_players.is_empty():
+		player_ref = null
+		return
+	
+	# If only one player, target them
+	if valid_players.size() == 1:
+		player_ref = valid_players[0]
+		return
+	
+	# Calculate weights based on inverse distance (closer = higher weight)
+	var weights = []
+	var total_weight = 0.0
+	
+	for i in range(distances.size()):
+		# Use inverse distance for weight (add 1 to avoid division by zero)
+		var weight = 1.0 / (distances[i] + 1.0)
+		weights.append(weight)
+		total_weight += weight
+	
+	# Normalize weights and select random player
+	var random_value = randf() * total_weight
+	var cumulative_weight = 0.0
+	
+	for i in range(valid_players.size()):
+		cumulative_weight += weights[i]
+		if random_value <= cumulative_weight:
+			player_ref = valid_players[i]
+			return
+	
+	# Fallback (shouldn't reach here)
+	player_ref = valid_players[0]
 
 func spawn_pickup(pickup_scene: PackedScene):
 	var pickup = pickup_scene.instantiate()
