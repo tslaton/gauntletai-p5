@@ -4,10 +4,12 @@ var MarsDustScene = preload("res://fx/mars_dust.tscn")
 var HealthDisplayScene = preload("res://ui/health_display.tscn")
 var ScoreDisplayScene = preload("res://ui/score_display.tscn")
 var GameOverScene = preload("res://ui/game_over.tscn")
+var VictoryScene = preload("res://ui/victory.tscn")
 var PlayerScene = preload("res://player/player.tscn")
 var Player2Scene = preload("res://player/player2.tscn")
 
 var game_over_ui: Control
+var victory_ui: Control
 var players = {}  # Dictionary to store player instances by peer ID
 var cameras = {}  # Dictionary to store cameras by peer ID
 var health_displays = {}  # Dictionary to store health displays by peer ID
@@ -27,6 +29,12 @@ func _ready():
 		game_over_ui.retry_pressed.connect(_on_retry_pressed)
 		game_over_ui.quit_pressed.connect(_on_quit_pressed)
 	
+	# Create victory UI
+	if not victory_ui:
+		victory_ui = VictoryScene.instantiate()
+		victory_ui.replay_pressed.connect(_on_retry_pressed)  # Same as retry
+		victory_ui.quit_pressed.connect(_on_quit_pressed)
+	
 	# Handle multiplayer vs single player setup
 	if NetworkManager.is_multiplayer_game:
 		setup_multiplayer()
@@ -45,6 +53,15 @@ func _ready():
 	game_over_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	# Ensure it can receive input during pause
 	game_over_ui.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	
+	# Add victory UI as overlay
+	if not victory_ui.get_parent():
+		add_child(victory_ui)
+	# Ensure it's on top
+	victory_ui.z_index = 100
+	victory_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# Ensure it can receive input during pause
+	victory_ui.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
 
 func setup_singleplayer():
 	# Use existing player in the scene
@@ -378,6 +395,11 @@ func _restart_game():
 		if child.name.begins_with("Bullet") or child.name.begins_with("EnemyBullet"):
 			child.queue_free()
 	
+	# Reset boss spawned flag in enemy spawner
+	var enemy_spawner = get_node_or_null("EnemySpawner")
+	if enemy_spawner:
+		enemy_spawner.boss_spawned = false
+	
 	# Reset alive players list
 	alive_players.clear()
 	
@@ -386,6 +408,12 @@ func _restart_game():
 		game_over_ui.hide_game_over()
 	else:
 		game_over_ui.visible = false
+	
+	# Hide victory UI
+	if victory_ui.has_method("hide_victory"):
+		victory_ui.hide_victory()
+	else:
+		victory_ui.visible = false
 	
 	# Wait multiple frames for cleanup to ensure nodes are fully freed
 	await get_tree().process_frame
@@ -411,10 +439,35 @@ func _restart_game():
 		# Force the game over UI to the top of the render order
 		game_over_ui.show()
 		game_over_ui.hide()
+	
+	# Ensure victory UI stays on top after reinit
+	if victory_ui and victory_ui.get_parent():
+		victory_ui.get_parent().move_child(victory_ui, -1)
+		victory_ui.z_index = 100
+		# Force the victory UI to the top of the render order
+		victory_ui.show()
+		victory_ui.hide()
 
 @rpc("authority", "call_local", "reliable")
 func _show_game_over_all():
 	game_over_ui.show_game_over()
+
+func _on_boss_died():
+	# Wait 3 seconds for explosions to animate
+	await get_tree().create_timer(3.0).timeout
+	
+	# Show victory screen
+	if NetworkManager.is_multiplayer_game:
+		if NetworkManager.is_host:
+			_show_victory_all.rpc()
+		else:
+			victory_ui.show_victory()
+	else:
+		victory_ui.show_victory()
+
+@rpc("authority", "call_local", "reliable")
+func _show_victory_all():
+	victory_ui.show_victory()
 
 func _on_quit_pressed():
 	if NetworkManager.is_multiplayer_game:
