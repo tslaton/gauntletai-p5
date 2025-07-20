@@ -30,8 +30,15 @@ func _physics_process(delta: float) -> void:
 	if transform.origin.z > 10:
 		queue_free()
 
+var is_collected: bool = false
+
 func _on_body_entered(body: Node3D):
+	# Prevent multiple collections
+	if is_collected:
+		return
+		
 	if body.is_in_group("Player"):
+		is_collected = true
 		# Let player handle the pickup effect
 		if body.has_method("collect_pickup"):
 			body.collect_pickup(pickup_type)

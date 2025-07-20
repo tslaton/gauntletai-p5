@@ -31,8 +31,8 @@ signal health_changed(new_health: int, max_health: int)
 signal player_died()
 
 # Weapon system
-var laser_stage: int = 1  # Current laser upgrade level (1-3)
-signal laser_upgraded(new_stage: int)
+var laser_stage: float = 1.0  # Current laser upgrade level (1-3, can be 0.5 increments in multiplayer)
+signal laser_upgraded(new_stage: float)
 
 # Movement variables
 var actual_velocity = Vector3()   # Current velocity with momentum
@@ -223,17 +223,18 @@ func _calculate_shoot_data():
 	var damage_to_apply: int = 10
 	var bullet_type: String = "normal"
 	
-	match laser_stage:
-		1:
-			guns_to_use = [gun0]
-			damage_to_apply = 10
-		2:
-			guns_to_use = guns
-			damage_to_apply = 20
-		3:
-			guns_to_use = guns
-			damage_to_apply = 30
-			bullet_type = "blue"
+	# WORKAROUND: Handle fractional laser stages from multiplayer double-pickup
+	# 1 or 1.5 = stage 1, 2 or 2.5 = stage 2, 3+ = stage 3
+	if laser_stage < 2:  # Stage 1 (includes 1.0 and 1.5)
+		guns_to_use = [gun0]
+		damage_to_apply = 10
+	elif laser_stage < 3:  # Stage 2 (includes 2.0 and 2.5)
+		guns_to_use = guns
+		damage_to_apply = 20
+	else:  # Stage 3 (includes 3.0 and above)
+		guns_to_use = guns
+		damage_to_apply = 30
+		bullet_type = "blue"
 	
 	var gun_positions = []
 	for gun in guns_to_use:
@@ -428,6 +429,9 @@ func restore_materials():
 
 func collect_pickup(pickup_type: String):
 	if NetworkManager.is_multiplayer_game:
+		# Apply pickup locally first
+		_apply_pickup(pickup_type)
+		# Then sync to other clients
 		_collect_pickup_synced.rpc(pickup_type)
 	else:
 		_apply_pickup(pickup_type)
@@ -437,14 +441,23 @@ func _apply_pickup(pickup_type: String):
 		"health":
 			# Heal the player
 			var heal_amount = 20
+			# WORKAROUND: In multiplayer, pickups are double-applied so we halve the effect
+			if NetworkManager.is_multiplayer_game:
+				heal_amount = heal_amount / 2
 			current_health = min(current_health + heal_amount, max_health)
 			emit_signal("health_changed", current_health, max_health)
 		"laser":
 			# Upgrade laser stage
 			if laser_stage < 3:
-				laser_stage += 1
+				# WORKAROUND: In multiplayer, pickups are double-applied so we use 0.5 increments
+				if NetworkManager.is_multiplayer_game:
+					laser_stage += 0.5
+				else:
+					laser_stage += 1
+				laser_stage = min(laser_stage, 3)  # Ensure we don't go over stage 3
 				emit_signal("laser_upgraded", laser_stage)
 
-@rpc("any_peer", "call_local", "reliable")
+@rpc("any_peer", "call_remote", "reliable")
 func _collect_pickup_synced(pickup_type: String):
+	# Only apply pickup for non-calling clients
 	_apply_pickup(pickup_type)

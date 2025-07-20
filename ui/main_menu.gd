@@ -23,7 +23,7 @@ func _ready():
 	status_label.text = ""
 	
 	# Set default IP for development
-	ip_input.text = "192.168.1.197"
+	ip_input.text = "192.168.1.1"
 
 func _on_single_player_pressed():
 	NetworkManager.start_singleplayer()
