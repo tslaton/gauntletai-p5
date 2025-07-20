@@ -27,6 +27,10 @@ var is_dying: bool = false
 var is_bursting: bool = false
 var burst_shots_fired: int = 0
 var burst_timer: float = 0.0
+var recycle_timer: float = 0.0
+var is_recycling: bool = false
+const RECYCLE_DELAY: float = 5.0
+const RECYCLE_Z_THRESHOLD: float = -10.0
 
 func _ready():
 	# Add to enemies group
@@ -72,36 +76,48 @@ func _physics_process(delta: float) -> void:
 			# Restore original material
 			mesh_instance.set_surface_override_material(0, original_material)
 	
-	# Shooting logic
-	if not player_ref or not is_instance_valid(player_ref) or not player_ref.visible:
-		select_target_player()
-	
-	if player_ref and is_instance_valid(player_ref):
-		# Handle burst firing
-		if is_bursting:
-			burst_timer -= delta
-			if burst_timer <= 0.0:
-				fire_single_bullet()
-				burst_shots_fired += 1
-				
-				if burst_shots_fired >= burst_count:
-					# Burst complete
-					is_bursting = false
+	# Shooting logic (disabled during recycling)
+	if not is_recycling:
+		if not player_ref or not is_instance_valid(player_ref) or not player_ref.visible:
+			select_target_player()
+		
+		if player_ref and is_instance_valid(player_ref):
+			# Handle burst firing
+			if is_bursting:
+				burst_timer -= delta
+				if burst_timer <= 0.0:
+					fire_single_bullet()
+					burst_shots_fired += 1
+					
+					if burst_shots_fired >= burst_count:
+						# Burst complete
+						is_bursting = false
+						burst_shots_fired = 0
+						shoot_timer = shoot_cooldown
+					else:
+						# Set timer for next bullet in burst
+						burst_timer = burst_delay
+			else:
+				# Normal cooldown between bursts
+				shoot_timer -= delta
+				if shoot_timer <= 0.0:
+					# Start new burst
+					is_bursting = true
 					burst_shots_fired = 0
-					shoot_timer = shoot_cooldown
-				else:
-					# Set timer for next bullet in burst
-					burst_timer = burst_delay
-		else:
-			# Normal cooldown between bursts
-			shoot_timer -= delta
-			if shoot_timer <= 0.0:
-				# Start new burst
-				is_bursting = true
-				burst_shots_fired = 0
-				burst_timer = 0.0
+					burst_timer = 0.0
 	
-	# destroy enemies when they go behind the camera
+	# Handle recycling when enemy reaches threshold
+	if not is_recycling and global_position.z >= RECYCLE_Z_THRESHOLD:
+		is_recycling = true
+		recycle_timer = RECYCLE_DELAY
+	
+	# Process recycle timer
+	if is_recycling:
+		recycle_timer -= delta
+		if recycle_timer <= 0:
+			queue_free()
+	
+	# Immediate destruction if enemy goes too far behind camera
 	if transform.origin.z > 10:
 		queue_free()
 

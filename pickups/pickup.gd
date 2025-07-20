@@ -5,6 +5,10 @@ extends Area3D
 @export var rotation_speed: float = 2.0
 
 var velocity: Vector3 = Vector3.ZERO
+var recycle_timer: float = 0.0
+var is_recycling: bool = false
+const RECYCLE_DELAY: float = 5.0
+const RECYCLE_Z_THRESHOLD: float = -10.0
 
 func _ready():
 	add_to_group("Pickups")
@@ -18,10 +22,22 @@ func _physics_process(delta: float) -> void:
 	# Move forward
 	global_position += velocity * delta
 	
-	# Rotate around Y axis
-	rotate_y(rotation_speed * delta)
+	# Rotate around Y axis (disabled during recycling for visibility)
+	if not is_recycling:
+		rotate_y(rotation_speed * delta)
 	
-	# Destroy if too far behind camera
+	# Handle recycling when pickup reaches threshold
+	if not is_recycling and global_position.z >= RECYCLE_Z_THRESHOLD:
+		is_recycling = true
+		recycle_timer = RECYCLE_DELAY
+	
+	# Process recycle timer
+	if is_recycling:
+		recycle_timer -= delta
+		if recycle_timer <= 0:
+			queue_free()
+	
+	# Immediate destruction if pickup goes too far behind camera
 	if transform.origin.z > 10:
 		queue_free()
 
