@@ -9,7 +9,6 @@ func _ready():
 	$Panel/VBoxContainer/QuitButton.pressed.connect(_on_quit_pressed)
 
 func show_game_over():
-	print("Game Over UI - show_game_over() called")
 	visible = true
 	get_tree().paused = true
 	# Make sure the UI can process input while paused
@@ -23,8 +22,6 @@ func show_game_over():
 	else:
 		$Panel/VBoxContainer/RetryButton.visible = true
 		$Panel/VBoxContainer/QuitButton.text = "Quit"
-	
-	print("Game Over UI visible: ", visible, " paused: ", get_tree().paused)
 
 func _on_retry_pressed():
 	get_tree().paused = false

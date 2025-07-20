@@ -61,10 +61,7 @@ func _ready():
 	
 	# Set authority for multiplayer
 	if NetworkManager.is_multiplayer_game:
-		print("Setting multiplayer authority for player_id: ", player_id, " on peer: ", multiplayer.get_unique_id())
 		set_multiplayer_authority(player_id)
-		print("Authority set. is_multiplayer_authority(): ", is_multiplayer_authority())
-		print("Player ", player_id, " authority: ", get_multiplayer_authority())
 	
 	
 	guns = [$Gun1, $Gun2]

@@ -108,12 +108,6 @@ func setup_multiplayer():
 	if player_ids.size() == 2:
 		# Small delay to ensure players are fully initialized
 		await get_tree().process_frame
-		
-		# Debug: Check what players exist
-		print("Players in group after spawning: ")
-		for p in get_tree().get_nodes_in_group("Player"):
-			print("  - ", p.name, " at position ", p.global_position)
-		
 		create_multiplayer_health_displays()
 
 func setup_split_screen():
@@ -149,7 +143,6 @@ func setup_split_screen():
 	viewports[2] = right_viewport
 
 func spawn_player(peer_id: int, player_number: int):
-	print("Spawning player - peer_id: ", peer_id, " player_number: ", player_number, " local_player_id: ", NetworkManager.local_player_id)
 	# Create player instance - use Player2Scene for second player
 	var player_scene_to_use = PlayerScene if player_number == 1 else Player2Scene
 	var player = player_scene_to_use.instantiate()
@@ -175,7 +168,6 @@ func spawn_player(peer_id: int, player_number: int):
 	if NetworkManager.is_multiplayer_game:
 		# The player's _ready function already sets authority, but we ensure it here too
 		player.set_multiplayer_authority(peer_id)
-		print("Set authority for player ", peer_id, " after adding to tree. Authority: ", player.get_multiplayer_authority())
 	
 	# Connect death signal
 	player.player_died.connect(_on_player_died.bind(peer_id))
@@ -197,12 +189,10 @@ func spawn_player(peer_id: int, player_number: int):
 	# In multiplayer, local player always uses viewport 1, remote player uses viewport 2
 	if NetworkManager.is_multiplayer_game and viewports.size() > 0:
 		var viewport_index = 1 if peer_id == NetworkManager.local_player_id else 2
-		print("Adding camera/crosshair for peer ", peer_id, " to viewport ", viewport_index, " (local_player_id: ", NetworkManager.local_player_id, ")")
 		if viewports.has(viewport_index) and viewports[viewport_index] != null:
 			viewports[viewport_index].add_child(camera)
 			viewports[viewport_index].add_child(crosshair_controller)
 		else:
-			print("WARNING: Viewport ", viewport_index, " not found or null, adding to main scene")
 			add_child(camera)
 			add_child(crosshair_controller)
 	else:
@@ -216,7 +206,6 @@ func spawn_player(peer_id: int, player_number: int):
 	# Only set crosshair controller for the local player
 	if peer_id == NetworkManager.local_player_id:
 		player.crosshair_controller = crosshair_controller
-		print("Set crosshair controller for local player ", peer_id)
 	else:
 		# Remote players don't need local crosshair reference
 		player.crosshair_controller = null
@@ -263,10 +252,8 @@ func _input(event):
 			get_tree().paused = !get_tree().paused
 
 func _on_player_died(peer_id: int):
-	print("Player died: ", peer_id)
 	# Remove from alive players list
 	alive_players.erase(peer_id)
-	print("Alive players: ", alive_players)
 	
 	# In single player, show game over immediately
 	if not NetworkManager.is_multiplayer_game:
@@ -276,7 +263,6 @@ func _on_player_died(peer_id: int):
 	
 	# In multiplayer, check if all players are dead
 	if alive_players.is_empty():
-		print("All players dead - showing game over")
 		# All players dead - game over for everyone
 		await get_tree().create_timer(1.0).timeout
 		if NetworkManager.is_host:
@@ -340,7 +326,6 @@ func _restart_game():
 	# Clear existing game objects
 	# First, clear all nodes from the Player group
 	for player_node in get_tree().get_nodes_in_group("Player"):
-		print("Removing player from group: ", player_node.name)
 		player_node.remove_from_group("Player")
 		player_node.queue_free()
 	
@@ -413,7 +398,6 @@ func _restart_game():
 	# Double-check that all players are gone
 	var remaining_players = get_tree().get_nodes_in_group("Player")
 	if remaining_players.size() > 0:
-		print("WARNING: Still have players after cleanup: ", remaining_players)
 		for p in remaining_players:
 			p.queue_free()
 		await get_tree().process_frame
@@ -434,7 +418,6 @@ func _restart_game():
 
 @rpc("authority", "call_local", "reliable")
 func _show_game_over_all():
-	print("Showing game over UI for all players")
 	game_over_ui.show_game_over()
 
 func _on_quit_pressed():
