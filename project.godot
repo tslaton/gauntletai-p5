@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="rail_shooter"
+config/name="Red Horizon"
 run/main_scene="res://ui/main_menu.tscn"
 config/features=PackedStringArray("4.4", "Forward Plus")
 
@@ -23,6 +23,10 @@ NetworkManager="*res://NetworkManager.gd"
 
 window/size/viewport_width=3456
 window/size/viewport_height=2234
+
+[dotnet]
+
+project/assembly_name="Red Horizon"
 
 [editor_plugins]
 
