@@ -1,7 +1,7 @@
 [gd_scene load_steps=4 format=3 uid="uid://sw4cryoodbwo"]
 
 [ext_resource type="Script" uid="uid://bfe2n1p5ygxd0" path="res://enemies/enemy.gd" id="1_7k104"]
-[ext_resource type="PackedScene" uid="uid://r3jm32anlsth" path="res://assets/models/enemy_ship_1.glb" id="2_enemy1"]
+[ext_resource type="PackedScene" uid="uid://bjim28x0sbcnt" path="res://assets/models/enemy_ship_1.glb" id="2_enemy1"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_7xaro"]
 size = Vector3(1.05458, 2.01748, 0.992645)
