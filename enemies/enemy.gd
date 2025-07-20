@@ -21,6 +21,7 @@ var mesh_instance: MeshInstance3D
 var original_material: Material
 var hit_flash_timer: float = 0.0
 const HIT_FLASH_DURATION: float = 0.1
+var is_dying: bool = false
 
 func _ready():
 	# Add to enemies group
@@ -158,9 +159,13 @@ func create_impact_effect(position: Vector3):
 	impact.global_position = position
 
 func die():
+	if is_dying:
+		return
+	
 	if NetworkManager.is_multiplayer_game:
 		_die_synced.rpc()
 	else:
+		is_dying = true
 		_perform_death()
 
 func _perform_death():
@@ -171,24 +176,32 @@ func _perform_death():
 	
 	# Only host decides pickups in multiplayer
 	if not NetworkManager.is_multiplayer_game or NetworkManager.is_host:
-		# Chance to spawn pickups
+		# Chance to spawn pickups - only one pickup per enemy
 		var rand = randf()
-		if rand < 0.2:  # 20% chance for laser pickup
+		if rand < 0.15:  # 15% chance for laser pickup
 			if NetworkManager.is_multiplayer_game:
 				_spawn_pickup_synced.rpc("laser", global_position)
 			else:
 				spawn_pickup(LaserPickup)
-		elif rand < 0.4:  # 20% chance for health pickup (0.2 + 0.2 = 0.4)
+		elif rand < 0.3:  # 15% chance for health pickup (0.15 + 0.15 = 0.3)
 			if NetworkManager.is_multiplayer_game:
 				_spawn_pickup_synced.rpc("health", global_position)
 			else:
 				spawn_pickup(HealthPickup)
+		# else: 70% chance for no pickup
+	
+	# Small delay before removing to ensure RPC is sent
+	if NetworkManager.is_multiplayer_game:
+		await get_tree().create_timer(0.1).timeout
 	
 	# Remove the enemy
 	queue_free()
 
 @rpc("any_peer", "call_local", "reliable")
 func _die_synced():
+	if is_dying:
+		return
+	is_dying = true
 	_perform_death()
 
 func find_nearest_player():
@@ -205,7 +218,10 @@ func find_nearest_player():
 
 func spawn_pickup(pickup_scene: PackedScene):
 	var pickup = pickup_scene.instantiate()
+	
+	# Add to parent (which should be main scene) for visibility in all viewports
 	get_parent().add_child(pickup)
+		
 	pickup.global_position = global_position
 	
 	# Continue enemy's trajectory toward player
@@ -215,6 +231,9 @@ func spawn_pickup(pickup_scene: PackedScene):
 func _spawn_pickup_synced(pickup_type: String, spawn_position: Vector3):
 	var pickup_scene = LaserPickup if pickup_type == "laser" else HealthPickup
 	var pickup = pickup_scene.instantiate()
+	
+	# Add to parent (which should be main scene) for visibility in all viewports
 	get_parent().add_child(pickup)
+		
 	pickup.global_position = spawn_position
 	pickup.velocity = Vector3(0, 0, speed)
