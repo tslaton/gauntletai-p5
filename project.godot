@@ -13,7 +13,6 @@ config_version=5
 config/name="rail_shooter"
 run/main_scene="res://ui/main_menu.tscn"
 config/features=PackedStringArray("4.4", "Forward Plus")
-config/icon="res://assets/icon.svg"
 
 [autoload]
 
@@ -28,3 +27,7 @@ window/size/viewport_height=2234
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/terrain_3d/plugin.cfg")
+
+[rendering]
+
+textures/vram_compression/import_etc2_astc=true

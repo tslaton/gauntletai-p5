@@ -4,8 +4,9 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://dg6hunu4hwon"
 path.s3tc="res://.godot/imported/enemy_ship_1_0.jpg-ce709a75ac03936a48157241ad7cc96b.s3tc.ctex"
+path.etc2="res://.godot/imported/enemy_ship_1_0.jpg-ce709a75ac03936a48157241ad7cc96b.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 generator_parameters={
@@ -15,7 +16,7 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/enemy_ship_1_0.jpg"
-dest_files=["res://.godot/imported/enemy_ship_1_0.jpg-ce709a75ac03936a48157241ad7cc96b.s3tc.ctex"]
+dest_files=["res://.godot/imported/enemy_ship_1_0.jpg-ce709a75ac03936a48157241ad7cc96b.s3tc.ctex", "res://.godot/imported/enemy_ship_1_0.jpg-ce709a75ac03936a48157241ad7cc96b.etc2.ctex"]
 
 [params]
 
