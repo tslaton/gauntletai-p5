@@ -4,9 +4,11 @@ extends CharacterBody3D
 @export var speed_min: float = 20.0
 @export var speed_max: float = 50.0
 @export var damage: int = 10  # Damage this enemy's bullets deal
-@export var shoot_cooldown: float = 2.0  # Time between shots
-@export var bullet_speed: float = 400.0  # Speed of enemy bullets
+@export var shoot_cooldown: float = 3.0  # Time between bursts
+@export var bullet_speed: float = 150.0  # Speed of enemy bullets
 @export var max_health: int = 30  # Enemy health
+@export var burst_count: int = 3  # Number of bullets per burst
+@export var burst_delay: float = 0.15  # Delay between bullets in burst
 
 var speed: float
 var current_health: int
@@ -22,6 +24,9 @@ var original_material: Material
 var hit_flash_timer: float = 0.0
 const HIT_FLASH_DURATION: float = 0.1
 var is_dying: bool = false
+var is_bursting: bool = false
+var burst_shots_fired: int = 0
+var burst_timer: float = 0.0
 
 func _ready():
 	# Add to enemies group
@@ -72,16 +77,35 @@ func _physics_process(delta: float) -> void:
 		find_nearest_player()
 	
 	if player_ref and is_instance_valid(player_ref):
-		shoot_timer -= delta
-		if shoot_timer <= 0.0:
-			shoot_at_player()
-			shoot_timer = shoot_cooldown
+		# Handle burst firing
+		if is_bursting:
+			burst_timer -= delta
+			if burst_timer <= 0.0:
+				fire_single_bullet()
+				burst_shots_fired += 1
+				
+				if burst_shots_fired >= burst_count:
+					# Burst complete
+					is_bursting = false
+					burst_shots_fired = 0
+					shoot_timer = shoot_cooldown
+				else:
+					# Set timer for next bullet in burst
+					burst_timer = burst_delay
+		else:
+			# Normal cooldown between bursts
+			shoot_timer -= delta
+			if shoot_timer <= 0.0:
+				# Start new burst
+				is_bursting = true
+				burst_shots_fired = 0
+				burst_timer = 0.0
 	
 	# destroy enemies when they go behind the camera
 	if transform.origin.z > 10:
 		queue_free()
 
-func shoot_at_player():
+func fire_single_bullet():
 	if not player_ref:
 		return
 		
@@ -89,7 +113,7 @@ func shoot_at_player():
 	if NetworkManager.is_multiplayer_game and not NetworkManager.is_host:
 		return
 	
-	# Calculate direction to player with some prediction
+	# Calculate direction to player
 	var player_pos = player_ref.global_position
 	var direction = (player_pos - global_position).normalized()
 	

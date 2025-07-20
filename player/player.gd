@@ -23,8 +23,8 @@ const BULLET_SPEED = -600         # negative: toward player
 const BULLET_COOLDOWN = 8         # frames
 
 # Health system
-@export var max_health: int = 10000
-@export var current_health: int = 10000
+@export var max_health: int = 200
+@export var current_health: int = 200
 
 @export var bullet_damage: int = 10  # Damage dealt by player bullets
 signal health_changed(new_health: int, max_health: int)
@@ -45,6 +45,11 @@ var hit_flash_timer: float = 0.0
 var mesh_instances: Array[MeshInstance3D] = []
 var original_materials: Array[Material] = []
 const HIT_FLASH_DURATION: float = 0.1
+
+# Invulnerability system
+var invulnerable_timer: float = 0.0
+const INVULNERABLE_DURATION: float = 1.0
+var is_invulnerable: bool = false
 
 # References
 var guns: Array[Node3D]
@@ -88,6 +93,22 @@ func _physics_process(delta: float) -> void:
 		hit_flash_timer -= delta
 		if hit_flash_timer <= 0:
 			restore_materials()
+	
+	# Handle invulnerability timer
+	if invulnerable_timer > 0:
+		invulnerable_timer -= delta
+		if invulnerable_timer <= 0:
+			is_invulnerable = false
+			# Restore normal materials when invulnerability ends
+			restore_materials()
+		else:
+			# Flash between red and normal during invulnerability
+			var flash_rate = 10.0  # Flashes per second
+			var should_flash = fmod(invulnerable_timer * flash_rate, 1.0) > 0.5
+			if should_flash:
+				flash_hit_without_timer()
+			else:
+				restore_materials()
 	
 	# Only process input/physics on the authority peer
 	if NetworkManager.is_multiplayer_game and not is_multiplayer_authority():
@@ -303,12 +324,17 @@ func take_damage(damage: int):
 		_apply_damage(damage)
 
 func _apply_damage(damage: int):
+	# Check if player is invulnerable
+	if is_invulnerable:
+		return
+	
 	current_health -= damage
 	current_health = max(0, current_health)
 	emit_signal("health_changed", current_health, max_health)
 	
-	# Flash effect
-	flash_hit()
+	# Start invulnerability period (flashing will be handled in _physics_process)
+	is_invulnerable = true
+	invulnerable_timer = INVULNERABLE_DURATION
 	
 	if current_health <= 0:
 		die()
@@ -350,6 +376,9 @@ func respawn():
 	visible = true
 	set_physics_process(true)
 	set_process(true)
+	# Reset invulnerability
+	is_invulnerable = false
+	invulnerable_timer = 0.0
 
 func find_mesh_instances(node: Node):
 	if node is MeshInstance3D:
@@ -377,6 +406,19 @@ func flash_hit():
 			mesh_instances[i].set_surface_override_material(0, flash_mat)
 	
 	hit_flash_timer = HIT_FLASH_DURATION
+
+func flash_hit_without_timer():
+	# Create red flash material
+	var flash_mat = StandardMaterial3D.new()
+	flash_mat.albedo_color = Color(1, 0, 0, 1)
+	flash_mat.emission_enabled = true
+	flash_mat.emission = Color(1, 0, 0, 1)
+	flash_mat.emission_energy = 2.0
+	
+	# Apply to all mesh instances
+	for i in range(mesh_instances.size()):
+		if mesh_instances[i]:
+			mesh_instances[i].set_surface_override_material(0, flash_mat)
 
 func restore_materials():
 	# Restore original materials
