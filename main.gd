@@ -9,7 +9,6 @@ var Player2Scene = preload("res://player/player2.tscn")
 var game_over_ui: Control
 var players = {}  # Dictionary to store player instances by peer ID
 var cameras = {}  # Dictionary to store cameras by peer ID
-var viewports = {}  # Dictionary to store viewports for split screen
 var health_displays = {}  # Dictionary to store health displays by peer ID
 var crosshair_controllers = {}  # Dictionary to store crosshair controllers
 var alive_players = []  # Track which players are still alive
@@ -20,7 +19,7 @@ func _ready():
 	if mars_dust:
 		Global.mars_dust_effect = mars_dust
 	
-	# Add game over UI - will be added later after viewports are setup
+	# Create game over UI
 	if not game_over_ui:
 		game_over_ui = GameOverScene.instantiate()
 		game_over_ui.retry_pressed.connect(_on_retry_pressed)
@@ -36,7 +35,7 @@ func _ready():
 	if NetworkManager.is_multiplayer_game:
 		NetworkManager.player_disconnected.connect(_on_player_disconnected)
 	
-	# Add game over UI as overlay (on top of viewports)
+	# Add game over UI as overlay
 	if not game_over_ui.get_parent():
 		add_child(game_over_ui)
 	# Ensure it's on top
@@ -93,10 +92,6 @@ func setup_multiplayer():
 	# Spawn players for all connected peers
 	var player_ids = NetworkManager.get_player_ids()
 	
-	# Setup viewports for split screen if there are 2 players
-	if player_ids.size() == 2:
-		setup_split_screen()
-	
 	# Spawn each player - host is always player 1
 	for i in range(player_ids.size()):
 		var peer_id = player_ids[i]
@@ -105,42 +100,11 @@ func setup_multiplayer():
 		spawn_player(peer_id, player_number)
 	
 	# After all players are spawned, create health displays
-	if player_ids.size() == 2:
+	if player_ids.size() > 0:
 		# Small delay to ensure players are fully initialized
 		await get_tree().process_frame
 		create_multiplayer_health_displays()
 
-func setup_split_screen():
-	# Create two viewport containers for split screen
-	var screen_size = get_viewport().get_visible_rect().size
-	
-	# Create container for both viewports
-	var split_container = HSplitContainer.new()
-	split_container.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	split_container.split_offset = int(screen_size.x / 2)
-	add_child(split_container)
-	
-	# Left viewport for player 1
-	var left_viewport_container = SubViewportContainer.new()
-	left_viewport_container.stretch = true
-	left_viewport_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	split_container.add_child(left_viewport_container)
-	
-	var left_viewport = SubViewport.new()
-	left_viewport.size = Vector2(screen_size.x / 2, screen_size.y)
-	left_viewport_container.add_child(left_viewport)
-	viewports[1] = left_viewport
-	
-	# Right viewport for player 2  
-	var right_viewport_container = SubViewportContainer.new()
-	right_viewport_container.stretch = true
-	right_viewport_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	split_container.add_child(right_viewport_container)
-	
-	var right_viewport = SubViewport.new()
-	right_viewport.size = Vector2(screen_size.x / 2, screen_size.y)
-	right_viewport_container.add_child(right_viewport)
-	viewports[2] = right_viewport
 
 func spawn_player(peer_id: int, player_number: int):
 	# Create player instance - use Player2Scene for second player
@@ -185,19 +149,9 @@ func spawn_player(peer_id: int, player_number: int):
 	var crosshair_controller = preload("res://player/crosshair_controller.tscn").instantiate()
 	crosshair_controller.position.y = Global.DEFAULT_FLYING_HEIGHT
 	
-	# Add to appropriate viewport or main scene
-	# In multiplayer, local player always uses viewport 1, remote player uses viewport 2
-	if NetworkManager.is_multiplayer_game and viewports.size() > 0:
-		var viewport_index = 1 if peer_id == NetworkManager.local_player_id else 2
-		if viewports.has(viewport_index) and viewports[viewport_index] != null:
-			viewports[viewport_index].add_child(camera)
-			viewports[viewport_index].add_child(crosshair_controller)
-		else:
-			add_child(camera)
-			add_child(crosshair_controller)
-	else:
-		add_child(camera)
-		add_child(crosshair_controller)
+	# Add camera and crosshair controller to main scene
+	add_child(camera)
+	add_child(crosshair_controller)
 	
 	cameras[peer_id] = camera
 	crosshair_controllers[peer_id] = crosshair_controller
@@ -218,27 +172,26 @@ func spawn_player(peer_id: int, player_number: int):
 		health_display.set_tracked_player(player, peer_id)
 
 func create_multiplayer_health_displays():
-	# Create health displays for both players in each viewport
-	for viewport_idx in viewports:
-		# Create health displays for all players
-		var player_ids = NetworkManager.get_player_ids()
-		player_ids.sort() # Ensure consistent order (player 1 first)
+	# Create health displays for all players
+	var player_ids = NetworkManager.get_player_ids()
+	player_ids.sort() # Ensure consistent order (player 1 first)
+	
+	var y_offset = 10
+	for i in range(player_ids.size()):
+		var pid = player_ids[i]
+		var health_display = HealthDisplayScene.instantiate()
+		health_display.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+		health_display.position = Vector2(10, y_offset)
+		add_child(health_display)
+		health_displays[pid] = health_display
 		
-		var y_offset = 10
-		for i in range(player_ids.size()):
-			var pid = player_ids[i]
-			var health_display = HealthDisplayScene.instantiate()
-			health_display.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-			health_display.position = Vector2(10, y_offset)
-			viewports[viewport_idx].add_child(health_display)
-			
-			# Find the player to track
-			var player_to_track = players.get(pid)
-			if player_to_track:
-				health_display.set_tracked_player(player_to_track, pid)
-			
-			# Move y_offset down for next health display (adjust spacing as needed)
-			y_offset += 40
+		# Find the player to track
+		var player_to_track = players.get(pid)
+		if player_to_track:
+			health_display.set_tracked_player(player_to_track, pid)
+		
+		# Move y_offset down for next health display
+		y_offset += 40
 
 func _input(event):
 	# Toggle Mars dust with 'M' key
@@ -299,10 +252,11 @@ func _on_player_disconnected(peer_id: int):
 	
 	alive_players.erase(peer_id)
 	
-	# If this was a multiplayer game and now only one player remains, continue as single player
+	# If this was a multiplayer game and now only one player remains, transition to single player
 	if NetworkManager.is_multiplayer_game and players.size() == 1:
-		# Could transition to single-player mode here if desired
-		pass
+		# Transition to single-player mode
+		NetworkManager.is_multiplayer_game = false
+		NetworkManager.is_host = false
 
 func _on_retry_pressed():
 	# Reload the current scene
@@ -349,26 +303,17 @@ func _restart_game():
 			crosshair_controllers[cc_id].queue_free()
 	crosshair_controllers.clear()
 	
-	for hd_id in health_displays:
-		if health_displays[hd_id]:
-			health_displays[hd_id].queue_free()
+	# Clear all health displays
+	for hd in health_displays.values():
+		if hd and is_instance_valid(hd):
+			hd.queue_free()
 	health_displays.clear()
 	
-	# Also clear any nodes in viewports
-	for viewport_id in viewports:
-		if viewports[viewport_id]:
-			for child in viewports[viewport_id].get_children():
-				if child.name.begins_with("HealthDisplay") or child.name.begins_with("Camera") or child.name.begins_with("CrosshairController"):
-					child.queue_free()
+	# Also clear any remaining health displays by name
+	for child in get_children():
+		if child.name.begins_with("HealthDisplay"):
+			child.queue_free()
 	
-	# Clear viewports if in multiplayer
-	if viewports.size() > 0:
-		# Find and remove the split container
-		for child in get_children():
-			if child is HSplitContainer:
-				child.queue_free()
-				break
-		viewports.clear()
 	
 	# Clear enemies, pickups, and bullets
 	for enemy in get_tree().get_nodes_in_group("Enemies"):
