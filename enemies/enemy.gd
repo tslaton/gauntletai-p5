@@ -17,6 +17,7 @@ var EnemyBullet = preload("res://projectiles/enemy_bullet.tscn")
 var LaserImpact = preload("res://fx/laser_impact.tscn")
 var LaserPickup = preload("res://pickups/laser_pickup.tscn")
 var HealthPickup = preload("res://pickups/health_pickup.tscn")
+var LaserSound = preload("res://assets/sounds/laser.mp3")
 var shoot_timer: float = 0.0
 var player_ref: Node3D
 var mesh_instance: MeshInstance3D
@@ -144,6 +145,22 @@ func _spawn_enemy_bullet(spawn_pos: Vector3, direction: Vector3, speed: float, d
 	# Orient bullet to face direction
 	if direction.length() > 0:
 		bullet.look_at(bullet.global_position + direction, Vector3.UP)
+	
+	# Play laser sound
+	var audio_player = AudioStreamPlayer3D.new()
+	audio_player.stream = LaserSound
+	audio_player.volume_db = -5.0
+	audio_player.pitch_scale = randf_range(0.9, 1.1)  # Slight pitch variation
+	audio_player.attenuation_model = 1  # Linear distance attenuation
+	audio_player.unit_size = 10.0
+	audio_player.max_distance = 200.0
+	audio_player.bus = "Master"
+	get_parent().add_child(audio_player)
+	audio_player.global_position = spawn_pos
+	audio_player.play()
+	
+	# Clean up audio player when done
+	audio_player.finished.connect(audio_player.queue_free)
 
 @rpc("authority", "call_local", "reliable")
 func _spawn_enemy_bullet_synced(spawn_pos: Vector3, direction: Vector3, speed: float, dmg: int):

@@ -64,6 +64,7 @@ var Bullet = load("res://projectiles/bullet.tscn")
 var BlueBullet = load("res://projectiles/blue_bullet.tscn")
 var LaserImpact = load("res://fx/laser_impact.tscn")
 var Explosion = load("res://fx/explosion.tscn")
+var LaserAltSound = preload("res://assets/sounds/laser_alt.mp3")
 
 func _ready():
 	# Add player to Player group for enemy targeting
@@ -284,6 +285,23 @@ func _perform_shoot():
 		if direction.length() > 0:
 			bullet.look_at(bullet.global_position + direction, Vector3.UP)
 	
+	# Play laser sound once for all bullets (not per bullet)
+	if shoot_data.gun_positions.size() > 0:
+		var audio_player = AudioStreamPlayer3D.new()
+		audio_player.stream = LaserAltSound
+		audio_player.volume_db = -8.0
+		audio_player.pitch_scale = randf_range(1.0, 1.2)  # Higher pitch for player
+		audio_player.attenuation_model = 1  # Linear distance attenuation
+		audio_player.unit_size = 10.0
+		audio_player.max_distance = 200.0
+		audio_player.bus = "Master"
+		main.add_child(audio_player)
+		audio_player.global_position = global_position
+		audio_player.play()
+		
+		# Clean up audio player when done
+		audio_player.finished.connect(audio_player.queue_free)
+	
 @rpc("any_peer", "call_local", "reliable")
 func _shoot_at_crosshair_synced(gun_positions: Array, target_pos: Vector3, damage: int, bullet_type: String):
 	# Validate that the caller has authority
@@ -325,6 +343,23 @@ func _shoot_at_crosshair_synced(gun_positions: Array, target_pos: Vector3, damag
 		# Orient bullet to face direction
 		if direction.length() > 0:
 			bullet.look_at(bullet.global_position + direction, Vector3.UP)
+	
+	# Play laser sound once for all bullets (not per bullet)
+	if gun_positions.size() > 0:
+		var audio_player = AudioStreamPlayer3D.new()
+		audio_player.stream = LaserAltSound
+		audio_player.volume_db = -8.0
+		audio_player.pitch_scale = randf_range(1.0, 1.2)  # Higher pitch for player
+		audio_player.attenuation_model = 1  # Linear distance attenuation
+		audio_player.unit_size = 10.0
+		audio_player.max_distance = 200.0
+		audio_player.bus = "Master"
+		main.add_child(audio_player)
+		audio_player.global_position = global_position
+		audio_player.play()
+		
+		# Clean up audio player when done
+		audio_player.finished.connect(audio_player.queue_free)
 
 @rpc("unreliable_ordered")
 func _sync_position(new_position: Vector3, new_rotation: Vector3):
