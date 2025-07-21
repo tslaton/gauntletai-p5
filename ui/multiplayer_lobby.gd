@@ -5,6 +5,13 @@ extends Control
 @onready var start_button = $VBoxContainer/StartButton
 @onready var back_button = $VBoxContainer/BackButton
 @onready var status_label = $VBoxContainer/StatusLabel
+@onready var difficulty_label = $VBoxContainer/DifficultyLabel
+@onready var difficulty_container = $VBoxContainer/DifficultyContainer
+@onready var easy_button = $VBoxContainer/DifficultyContainer/EasyButton
+@onready var medium_button = $VBoxContainer/DifficultyContainer/MediumButton
+@onready var hard_button = $VBoxContainer/DifficultyContainer/HardButton
+
+var difficulty_buttons: Array[Button]
 
 func _ready():
 	start_button.pressed.connect(_on_start_pressed)
@@ -18,10 +25,21 @@ func _ready():
 		ip_label.text = "Your IP: " + NetworkManager.get_local_ip_address()
 		start_button.disabled = true
 		status_label.text = "Waiting for another player..."
+		
+		# Setup difficulty buttons for host
+		difficulty_buttons = [easy_button, medium_button, hard_button]
+		easy_button.pressed.connect(_on_difficulty_selected.bind(Global.Difficulty.EASY))
+		medium_button.pressed.connect(_on_difficulty_selected.bind(Global.Difficulty.MEDIUM))
+		hard_button.pressed.connect(_on_difficulty_selected.bind(Global.Difficulty.HARD))
+		_update_difficulty_buttons()
 	else:
 		ip_label.text = "Connected to host"
 		start_button.hide()
 		status_label.text = "Waiting for host to start..."
+		
+		# Hide difficulty selection for non-host players
+		difficulty_label.hide()
+		difficulty_container.hide()
 	
 	_update_player_list()
 
@@ -66,3 +84,13 @@ func _on_start_pressed():
 func _on_back_pressed():
 	NetworkManager.disconnect_from_game()
 	get_tree().change_scene_to_file("res://ui/main_menu.tscn")
+
+func _on_difficulty_selected(difficulty: Global.Difficulty):
+	Global.current_difficulty = difficulty
+	_update_difficulty_buttons()
+
+func _update_difficulty_buttons():
+	# Update button states based on current difficulty
+	easy_button.button_pressed = Global.current_difficulty == Global.Difficulty.EASY
+	medium_button.button_pressed = Global.current_difficulty == Global.Difficulty.MEDIUM
+	hard_button.button_pressed = Global.current_difficulty == Global.Difficulty.HARD

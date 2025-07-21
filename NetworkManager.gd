@@ -61,12 +61,18 @@ func start_multiplayer_game():
 		print("Only host can start the game")
 		return
 	
+	# Send difficulty setting to all clients before starting
+	_sync_difficulty.rpc(Global.current_difficulty)
 	_notify_game_start.rpc()
 	get_tree().change_scene_to_file("res://main.tscn")
 
 @rpc("authority", "call_local", "reliable")
 func _notify_game_start():
 	get_tree().change_scene_to_file("res://main.tscn")
+
+@rpc("authority", "call_local", "reliable")
+func _sync_difficulty(difficulty: int):
+	Global.current_difficulty = difficulty
 
 func disconnect_from_game():
 	multiplayer.multiplayer_peer = null

@@ -85,7 +85,8 @@ func _ready():
 	main = get_tree().current_scene
 	# Crosshair controller will be set by main.gd for local player only
 	
-	# Initialize health
+	# Initialize health based on difficulty
+	max_health = Global.get_player_health()
 	current_health = max_health
 	emit_signal("health_changed", current_health, max_health)
 	
