@@ -2,13 +2,16 @@ extends CharacterBody3D
 
 # Boss constants
 const BOSS_Z_POSITION: float = -80.0
-const BOSS_MAX_HEALTH: int = 1000
+const BOSS_MAX_HEALTH: int = 10000
 const STRAFE_SPEED: float = 15.0
 const STRAFE_RANGE: float = 30.0  # How far left/right boss can move
 
+# Bomb attack constants
+const BOMB_COOLDOWN: float = 4.0
+
 # Movement and combat properties
 @export var damage: int = 10  # Damage this boss's bullets deal
-@export var shoot_cooldown: float = 3.0  # Time between bursts
+@export var shoot_cooldown: float = 1.5  # Time between bursts
 @export var bullet_speed: float = 150.0  # Speed of boss bullets
 @export var burst_count: int = 3  # Number of bullets per burst
 @export var burst_delay: float = 0.15  # Delay between bullets in burst
@@ -24,7 +27,10 @@ var Explosion = preload("res://fx/explosion.tscn")
 var EnemyBullet = preload("res://projectiles/enemy_bullet.tscn")
 var LaserImpact = preload("res://fx/laser_impact.tscn")
 var LaserSound = preload("res://assets/sounds/laser.mp3")
+var VerticalBomb = preload("res://projectiles/vertical_bomb.tscn")
+var HorizontalBomb = preload("res://projectiles/horizontal_bomb.tscn")
 var shoot_timer: float = 0.0
+var bomb_timer: float = 0.0
 var player_ref: Node3D
 var mesh_instance: MeshInstance3D
 var original_material: Material
@@ -57,6 +63,8 @@ func _ready():
 	select_target_player()
 	# Start shoot timer with some randomness
 	shoot_timer = randf_range(0.5, shoot_cooldown)
+	# Start bomb timer with some randomness
+	bomb_timer = randf_range(2.0, BOMB_COOLDOWN)
 	
 	# Get mesh instance for hit flash effect
 	var boss_mesh_parent = get_node_or_null("BossMesh")
@@ -135,6 +143,16 @@ func _physics_process(delta: float) -> void:
 				is_bursting = true
 				burst_shots_fired = 0
 				burst_timer = 0.0
+		
+		# Handle bomb attacks
+		bomb_timer -= delta
+		if bomb_timer <= 0.0:
+			# 50/50 chance for vertical or horizontal bomb
+			if randf() < 0.5:
+				spawn_vertical_bomb()
+			else:
+				spawn_horizontal_bomb()
+			bomb_timer = BOMB_COOLDOWN
 
 func fire_single_bullet():
 	if not player_ref:
@@ -323,3 +341,53 @@ func select_target_player():
 	
 	# Fallback (shouldn't reach here)
 	player_ref = valid_players[0]
+
+func spawn_vertical_bomb():
+	# In multiplayer, only host controls boss attacks
+	if NetworkManager.is_multiplayer_game and not NetworkManager.is_host:
+		return
+	
+	# Generate random target position
+	var target_x = randf_range(-40.0, 40.0)
+	var target_y = randf_range(-20.0, 20.0)
+	var target_pos = Vector3(target_x, target_y, 0)
+	
+	if NetworkManager.is_multiplayer_game:
+		_spawn_vertical_bomb_synced.rpc(global_position, target_pos)
+	else:
+		_spawn_vertical_bomb(global_position, target_pos)
+
+func _spawn_vertical_bomb(spawn_pos: Vector3, target_pos: Vector3):
+	var bomb = VerticalBomb.instantiate()
+	get_parent().add_child(bomb)
+	bomb.global_position = spawn_pos
+	bomb.initialize(target_pos)
+
+@rpc("authority", "call_local", "reliable")
+func _spawn_vertical_bomb_synced(spawn_pos: Vector3, target_pos: Vector3):
+	_spawn_vertical_bomb(spawn_pos, target_pos)
+
+func spawn_horizontal_bomb():
+	# In multiplayer, only host controls boss attacks
+	if NetworkManager.is_multiplayer_game and not NetworkManager.is_host:
+		return
+	
+	# Generate random target position
+	var target_x = randf_range(-40.0, 40.0)
+	var target_y = randf_range(-20.0, 20.0)
+	var target_pos = Vector3(target_x, target_y, 0)
+	
+	if NetworkManager.is_multiplayer_game:
+		_spawn_horizontal_bomb_synced.rpc(global_position, target_pos)
+	else:
+		_spawn_horizontal_bomb(global_position, target_pos)
+
+func _spawn_horizontal_bomb(spawn_pos: Vector3, target_pos: Vector3):
+	var bomb = HorizontalBomb.instantiate()
+	get_parent().add_child(bomb)
+	bomb.global_position = spawn_pos
+	bomb.initialize(target_pos)
+
+@rpc("authority", "call_local", "reliable")
+func _spawn_horizontal_bomb_synced(spawn_pos: Vector3, target_pos: Vector3):
+	_spawn_horizontal_bomb(spawn_pos, target_pos)

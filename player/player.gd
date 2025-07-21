@@ -23,8 +23,8 @@ const BULLET_SPEED = -600         # negative: toward player
 const BULLET_COOLDOWN = 8         # frames
 
 # Health system
-@export var max_health: int = 2000
-@export var current_health: int = 2000
+@export var max_health: int = 200
+@export var current_health: int = 200
 
 @export var bullet_damage: int = 10  # Damage dealt by player bullets
 signal health_changed(new_health: int, max_health: int)

@@ -1,0 +1,33 @@
+[gd_scene load_steps=6 format=3 uid="uid://horizontal_bomb"]
+
+[ext_resource type="Script" path="res://projectiles/horizontal_bomb.gd" id="1_horizontal_bomb"]
+[ext_resource type="PackedScene" path="res://assets/models/horizontal_bomb.glb" id="2_horizontal_bomb_model"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_bomb"]
+emission_enabled = true
+emission = Color(0.8, 0.2, 0.2, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_bomb"]
+material = SubResource("StandardMaterial3D_bomb")
+size = Vector3(3, 2, 2)
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_bomb"]
+size = Vector3(3, 2, 2)
+
+[node name="HorizontalBomb" type="CharacterBody3D"]
+script = ExtResource("1_horizontal_bomb")
+
+[node name="HorizontalBombMesh" type="Node3D" parent="."]
+
+[node name="BombModel" parent="HorizontalBombMesh" instance=ExtResource("2_horizontal_bomb_model")]
+transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, 0, 0, 0)
+
+[node name="Area3D" type="Area3D" parent="."]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Area3D"]
+shape = SubResource("BoxShape3D_bomb")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("BoxShape3D_bomb")
+
+[connection signal="body_entered" from="Area3D" to="." method="_on_area_3d_body_entered"]

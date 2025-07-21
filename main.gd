@@ -390,6 +390,10 @@ func _restart_game():
 	for pickup in get_tree().get_nodes_in_group("Pickups"):
 		pickup.queue_free()
 	
+	# Clear all bombs
+	for bomb in get_tree().get_nodes_in_group("Bombs"):
+		bomb.queue_free()
+	
 	# Clear all bullets
 	for child in get_children():
 		if child.name.begins_with("Bullet") or child.name.begins_with("EnemyBullet"):
