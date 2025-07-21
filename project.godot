@@ -10,10 +10,9 @@ config_version=5
 
 [application]
 
-config/name="rail_shooter"
+config/name="Red Horizon"
 run/main_scene="res://ui/main_menu.tscn"
 config/features=PackedStringArray("4.4", "Forward Plus")
-config/icon="res://assets/icon.svg"
 
 [autoload]
 
@@ -25,6 +24,22 @@ NetworkManager="*res://NetworkManager.gd"
 window/size/viewport_width=3456
 window/size/viewport_height=2234
 
+[dotnet]
+
+project/assembly_name="Red Horizon"
+
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/terrain_3d/plugin.cfg")
+
+[layer_names]
+
+3d_physics/layer_1="World"
+3d_physics/layer_2="Player"
+3d_physics/layer_3="Enemy"
+3d_physics/layer_4="PlayerBullet"
+3d_physics/layer_5="EnemyBullet"
+
+[rendering]
+
+textures/vram_compression/import_etc2_astc=true

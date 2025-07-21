@@ -2,6 +2,17 @@ extends CharacterBody3D
 
 const BULLET_RECYCLE_DISTANCE = 10.0  # Z position where bullets get recycled (behind player)
 
+func _ready():
+	# Set collision layers: EnemyBullet is on layer 5
+	collision_layer = 16  # Only on EnemyBullet layer (bit 5)
+	collision_mask = 2  # Only collide with Player (bit 2)
+	
+	# Also set collision layers for the Area3D child (used for hit detection)
+	var area = $Area3D
+	if area:
+		area.collision_layer = 16  # Only on EnemyBullet layer (bit 5)
+		area.collision_mask = 2  # Only collide with Player (bit 2)
+
 func _physics_process(delta: float) -> void:
 	move_and_slide()
 	

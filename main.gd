@@ -2,14 +2,18 @@ extends Node3D
 
 var MarsDustScene = preload("res://fx/mars_dust.tscn")
 var HealthDisplayScene = preload("res://ui/health_display.tscn")
+var ScoreDisplayScene = preload("res://ui/score_display.tscn")
 var GameOverScene = preload("res://ui/game_over.tscn")
+var VictoryScene = preload("res://ui/victory.tscn")
 var PlayerScene = preload("res://player/player.tscn")
 var Player2Scene = preload("res://player/player2.tscn")
 
 var game_over_ui: Control
+var victory_ui: Control
 var players = {}  # Dictionary to store player instances by peer ID
 var cameras = {}  # Dictionary to store cameras by peer ID
 var health_displays = {}  # Dictionary to store health displays by peer ID
+var score_displays = {}  # Dictionary to store score displays by peer ID
 var crosshair_controllers = {}  # Dictionary to store crosshair controllers
 var alive_players = []  # Track which players are still alive
 
@@ -24,6 +28,12 @@ func _ready():
 		game_over_ui = GameOverScene.instantiate()
 		game_over_ui.retry_pressed.connect(_on_retry_pressed)
 		game_over_ui.quit_pressed.connect(_on_quit_pressed)
+	
+	# Create victory UI
+	if not victory_ui:
+		victory_ui = VictoryScene.instantiate()
+		victory_ui.replay_pressed.connect(_on_retry_pressed)  # Same as retry
+		victory_ui.quit_pressed.connect(_on_quit_pressed)
 	
 	# Handle multiplayer vs single player setup
 	if NetworkManager.is_multiplayer_game:
@@ -43,6 +53,15 @@ func _ready():
 	game_over_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	# Ensure it can receive input during pause
 	game_over_ui.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
+	
+	# Add victory UI as overlay
+	if not victory_ui.get_parent():
+		add_child(victory_ui)
+	# Ensure it's on top
+	victory_ui.z_index = 100
+	victory_ui.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# Ensure it can receive input during pause
+	victory_ui.process_mode = Node.PROCESS_MODE_WHEN_PAUSED
 
 func setup_singleplayer():
 	# Use existing player in the scene
@@ -72,6 +91,11 @@ func setup_singleplayer():
 	var health_display = HealthDisplayScene.instantiate()
 	add_child(health_display)
 	health_displays[1] = health_display
+	
+	# Add score display UI
+	var score_display = ScoreDisplayScene.instantiate()
+	add_child(score_display)
+	score_displays[1] = score_display
 
 func setup_multiplayer():
 	# Remove the default player from the scene if it exists
@@ -104,6 +128,7 @@ func setup_multiplayer():
 		# Small delay to ensure players are fully initialized
 		await get_tree().process_frame
 		create_multiplayer_health_displays()
+		create_multiplayer_score_displays()
 
 
 func spawn_player(peer_id: int, player_number: int):
@@ -170,6 +195,12 @@ func spawn_player(peer_id: int, player_number: int):
 		add_child(health_display)
 		health_displays[peer_id] = health_display
 		health_display.set_tracked_player(player, peer_id)
+		
+		# Single player score display
+		var score_display = ScoreDisplayScene.instantiate()
+		add_child(score_display)
+		score_displays[peer_id] = score_display
+		score_display.set_tracked_player(player, peer_id)
 
 func create_multiplayer_health_displays():
 	# Create health displays for all players
@@ -191,6 +222,28 @@ func create_multiplayer_health_displays():
 			health_display.set_tracked_player(player_to_track, pid)
 		
 		# Move y_offset down for next health display
+		y_offset += 40
+
+func create_multiplayer_score_displays():
+	# Create score displays for all players on the right side
+	var player_ids = NetworkManager.get_player_ids()
+	player_ids.sort() # Ensure consistent order (player 1 first)
+	
+	var y_offset = 10
+	for i in range(player_ids.size()):
+		var pid = player_ids[i]
+		var score_display = ScoreDisplayScene.instantiate()
+		score_display.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+		score_display.position = Vector2(-300, y_offset)  # Negative offset from right
+		add_child(score_display)
+		score_displays[pid] = score_display
+		
+		# Find the player to track
+		var player_to_track = players.get(pid)
+		if player_to_track:
+			score_display.set_tracked_player(player_to_track, pid)
+		
+		# Move y_offset down for next score display
 		y_offset += 40
 
 func _input(event):
@@ -249,6 +302,10 @@ func _on_player_disconnected(peer_id: int):
 	if health_displays.has(peer_id):
 		health_displays[peer_id].queue_free()
 		health_displays.erase(peer_id)
+	
+	if score_displays.has(peer_id):
+		score_displays[peer_id].queue_free()
+		score_displays.erase(peer_id)
 	
 	alive_players.erase(peer_id)
 	
@@ -309,9 +366,20 @@ func _restart_game():
 			hd.queue_free()
 	health_displays.clear()
 	
+	# Clear all score displays
+	for sd in score_displays.values():
+		if sd and is_instance_valid(sd):
+			sd.queue_free()
+	score_displays.clear()
+	
 	# Also clear any remaining health displays by name
 	for child in get_children():
 		if child.name.begins_with("HealthDisplay"):
+			child.queue_free()
+			
+	# Also clear any remaining score displays by name
+	for child in get_children():
+		if child.name.begins_with("ScoreDisplay"):
 			child.queue_free()
 	
 	
@@ -322,10 +390,19 @@ func _restart_game():
 	for pickup in get_tree().get_nodes_in_group("Pickups"):
 		pickup.queue_free()
 	
+	# Clear all bombs
+	for bomb in get_tree().get_nodes_in_group("Bombs"):
+		bomb.queue_free()
+	
 	# Clear all bullets
 	for child in get_children():
 		if child.name.begins_with("Bullet") or child.name.begins_with("EnemyBullet"):
 			child.queue_free()
+	
+	# Reset boss spawned flag in enemy spawner
+	var enemy_spawner = get_node_or_null("EnemySpawner")
+	if enemy_spawner:
+		enemy_spawner.boss_spawned = false
 	
 	# Reset alive players list
 	alive_players.clear()
@@ -335,6 +412,12 @@ func _restart_game():
 		game_over_ui.hide_game_over()
 	else:
 		game_over_ui.visible = false
+	
+	# Hide victory UI
+	if victory_ui.has_method("hide_victory"):
+		victory_ui.hide_victory()
+	else:
+		victory_ui.visible = false
 	
 	# Wait multiple frames for cleanup to ensure nodes are fully freed
 	await get_tree().process_frame
@@ -360,10 +443,35 @@ func _restart_game():
 		# Force the game over UI to the top of the render order
 		game_over_ui.show()
 		game_over_ui.hide()
+	
+	# Ensure victory UI stays on top after reinit
+	if victory_ui and victory_ui.get_parent():
+		victory_ui.get_parent().move_child(victory_ui, -1)
+		victory_ui.z_index = 100
+		# Force the victory UI to the top of the render order
+		victory_ui.show()
+		victory_ui.hide()
 
 @rpc("authority", "call_local", "reliable")
 func _show_game_over_all():
 	game_over_ui.show_game_over()
+
+func _on_boss_died():
+	# Wait 3 seconds for explosions to animate
+	await get_tree().create_timer(3.0).timeout
+	
+	# Show victory screen
+	if NetworkManager.is_multiplayer_game:
+		if NetworkManager.is_host:
+			_show_victory_all.rpc()
+		else:
+			victory_ui.show_victory()
+	else:
+		victory_ui.show_victory()
+
+@rpc("authority", "call_local", "reliable")
+func _show_victory_all():
+	victory_ui.show_victory()
 
 func _on_quit_pressed():
 	if NetworkManager.is_multiplayer_game:

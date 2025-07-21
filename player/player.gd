@@ -23,15 +23,20 @@ const BULLET_SPEED = -600         # negative: toward player
 const BULLET_COOLDOWN = 8         # frames
 
 # Health system
-@export var max_health: int = 100
-@export var current_health: int = 100
+@export var max_health: int = 200
+@export var current_health: int = 200
+
 @export var bullet_damage: int = 10  # Damage dealt by player bullets
 signal health_changed(new_health: int, max_health: int)
 signal player_died()
 
+# Score system
+var score: int = 0
+signal score_changed(new_score: int)
+
 # Weapon system
-var laser_stage: int = 1  # Current laser upgrade level (1-3)
-signal laser_upgraded(new_stage: int)
+var laser_stage: float = 1.0  # Current laser upgrade level (1-3, can be 0.5 increments in multiplayer)
+signal laser_upgraded(new_stage: float)
 
 # Movement variables
 var actual_velocity = Vector3()   # Current velocity with momentum
@@ -45,6 +50,11 @@ var mesh_instances: Array[MeshInstance3D] = []
 var original_materials: Array[Material] = []
 const HIT_FLASH_DURATION: float = 0.1
 
+# Invulnerability system
+var invulnerable_timer: float = 0.0
+const INVULNERABLE_DURATION: float = 1.0
+var is_invulnerable: bool = false
+
 # References
 var guns: Array[Node3D]
 var gun0: Node3D  # Center gun for stage 1
@@ -54,10 +64,15 @@ var Bullet = load("res://projectiles/bullet.tscn")
 var BlueBullet = load("res://projectiles/blue_bullet.tscn")
 var LaserImpact = load("res://fx/laser_impact.tscn")
 var Explosion = load("res://fx/explosion.tscn")
+var LaserAltSound = preload("res://assets/sounds/laser_alt.mp3")
 
 func _ready():
 	# Add player to Player group for enemy targeting
 	add_to_group("Player")
+	
+	# Set collision layers: Player is on layer 2
+	collision_layer = 2  # Only on Player layer (bit 2)
+	collision_mask = 1 + 16  # Collide with World (bit 1) and EnemyBullet (bit 5)
 	
 	# Set authority for multiplayer
 	if NetworkManager.is_multiplayer_game:
@@ -83,6 +98,22 @@ func _physics_process(delta: float) -> void:
 		hit_flash_timer -= delta
 		if hit_flash_timer <= 0:
 			restore_materials()
+	
+	# Handle invulnerability timer
+	if invulnerable_timer > 0:
+		invulnerable_timer -= delta
+		if invulnerable_timer <= 0:
+			is_invulnerable = false
+			# Restore normal materials when invulnerability ends
+			restore_materials()
+		else:
+			# Flash between red and normal during invulnerability
+			var flash_rate = 10.0  # Flashes per second
+			var should_flash = fmod(invulnerable_timer * flash_rate, 1.0) > 0.5
+			if should_flash:
+				flash_hit_without_timer()
+			else:
+				restore_materials()
 	
 	# Only process input/physics on the authority peer
 	if NetworkManager.is_multiplayer_game and not is_multiplayer_authority():
@@ -197,17 +228,18 @@ func _calculate_shoot_data():
 	var damage_to_apply: int = 10
 	var bullet_type: String = "normal"
 	
-	match laser_stage:
-		1:
-			guns_to_use = [gun0]
-			damage_to_apply = 10
-		2:
-			guns_to_use = guns
-			damage_to_apply = 20
-		3:
-			guns_to_use = guns
-			damage_to_apply = 30
-			bullet_type = "blue"
+	# WORKAROUND: Handle fractional laser stages from multiplayer double-pickup
+	# 1 or 1.5 = stage 1, 2 or 2.5 = stage 2, 3+ = stage 3
+	if laser_stage < 2:  # Stage 1 (includes 1.0 and 1.5)
+		guns_to_use = [gun0]
+		damage_to_apply = 10
+	elif laser_stage < 3:  # Stage 2 (includes 2.0 and 2.5)
+		guns_to_use = guns
+		damage_to_apply = 20
+	else:  # Stage 3 (includes 3.0 and above)
+		guns_to_use = guns
+		damage_to_apply = 30
+		bullet_type = "blue"
 	
 	var gun_positions = []
 	for gun in guns_to_use:
@@ -240,6 +272,8 @@ func _perform_shoot():
 		
 		# Store damage value in bullet metadata
 		bullet.set_meta("damage", damage_to_apply)
+		# Store shooter reference
+		bullet.set_meta("shooter", self)
 		
 		# Calculate direction from gun to the target position
 		var direction = (target_pos - gun_pos).normalized()
@@ -250,6 +284,23 @@ func _perform_shoot():
 		# Orient bullet to face direction
 		if direction.length() > 0:
 			bullet.look_at(bullet.global_position + direction, Vector3.UP)
+	
+	# Play laser sound once for all bullets (not per bullet)
+	if shoot_data.gun_positions.size() > 0:
+		var audio_player = AudioStreamPlayer3D.new()
+		audio_player.stream = LaserAltSound
+		audio_player.volume_db = -8.0
+		audio_player.pitch_scale = randf_range(1.0, 1.2)  # Higher pitch for player
+		audio_player.attenuation_model = 1  # Linear distance attenuation
+		audio_player.unit_size = 10.0
+		audio_player.max_distance = 200.0
+		audio_player.bus = "Master"
+		main.add_child(audio_player)
+		audio_player.global_position = global_position
+		audio_player.play()
+		
+		# Clean up audio player when done
+		audio_player.finished.connect(audio_player.queue_free)
 	
 @rpc("any_peer", "call_local", "reliable")
 func _shoot_at_crosshair_synced(gun_positions: Array, target_pos: Vector3, damage: int, bullet_type: String):
@@ -273,6 +324,15 @@ func _shoot_at_crosshair_synced(gun_positions: Array, target_pos: Vector3, damag
 		
 		# Store damage value in bullet metadata
 		bullet.set_meta("damage", damage)
+		# Store shooter reference - find the authoritative player
+		var shooter = self
+		if NetworkManager.is_multiplayer_game:
+			# In multiplayer, find the player that initiated the shot
+			for player in get_tree().get_nodes_in_group("Player"):
+				if player.get_multiplayer_authority() == get_multiplayer_authority():
+					shooter = player
+					break
+		bullet.set_meta("shooter", shooter)
 		
 		# Calculate direction from gun to the target position
 		var direction = (target_pos - gun_pos).normalized()
@@ -283,6 +343,23 @@ func _shoot_at_crosshair_synced(gun_positions: Array, target_pos: Vector3, damag
 		# Orient bullet to face direction
 		if direction.length() > 0:
 			bullet.look_at(bullet.global_position + direction, Vector3.UP)
+	
+	# Play laser sound once for all bullets (not per bullet)
+	if gun_positions.size() > 0:
+		var audio_player = AudioStreamPlayer3D.new()
+		audio_player.stream = LaserAltSound
+		audio_player.volume_db = -8.0
+		audio_player.pitch_scale = randf_range(1.0, 1.2)  # Higher pitch for player
+		audio_player.attenuation_model = 1  # Linear distance attenuation
+		audio_player.unit_size = 10.0
+		audio_player.max_distance = 200.0
+		audio_player.bus = "Master"
+		main.add_child(audio_player)
+		audio_player.global_position = global_position
+		audio_player.play()
+		
+		# Clean up audio player when done
+		audio_player.finished.connect(audio_player.queue_free)
 
 @rpc("unreliable_ordered")
 func _sync_position(new_position: Vector3, new_rotation: Vector3):
@@ -298,12 +375,17 @@ func take_damage(damage: int):
 		_apply_damage(damage)
 
 func _apply_damage(damage: int):
+	# Check if player is invulnerable
+	if is_invulnerable:
+		return
+	
 	current_health -= damage
 	current_health = max(0, current_health)
 	emit_signal("health_changed", current_health, max_health)
 	
-	# Flash effect
-	flash_hit()
+	# Start invulnerability period (flashing will be handled in _physics_process)
+	is_invulnerable = true
+	invulnerable_timer = INVULNERABLE_DURATION
 	
 	if current_health <= 0:
 		die()
@@ -339,12 +421,17 @@ func _die_synced():
 func respawn():
 	current_health = max_health
 	emit_signal("health_changed", current_health, max_health)
+	score = 0
+	emit_signal("score_changed", score)
 	# Reset position to starting position
 	position = Vector3(0, Global.DEFAULT_FLYING_HEIGHT, -11)
 	# Make visible and re-enable processing
 	visible = true
 	set_physics_process(true)
 	set_process(true)
+	# Reset invulnerability
+	is_invulnerable = false
+	invulnerable_timer = 0.0
 
 func find_mesh_instances(node: Node):
 	if node is MeshInstance3D:
@@ -373,6 +460,19 @@ func flash_hit():
 	
 	hit_flash_timer = HIT_FLASH_DURATION
 
+func flash_hit_without_timer():
+	# Create red flash material
+	var flash_mat = StandardMaterial3D.new()
+	flash_mat.albedo_color = Color(1, 0, 0, 1)
+	flash_mat.emission_enabled = true
+	flash_mat.emission = Color(1, 0, 0, 1)
+	flash_mat.emission_energy = 2.0
+	
+	# Apply to all mesh instances
+	for i in range(mesh_instances.size()):
+		if mesh_instances[i]:
+			mesh_instances[i].set_surface_override_material(0, flash_mat)
+
 func restore_materials():
 	# Restore original materials
 	for i in range(mesh_instances.size()):
@@ -381,6 +481,9 @@ func restore_materials():
 
 func collect_pickup(pickup_type: String):
 	if NetworkManager.is_multiplayer_game:
+		# Apply pickup locally first
+		_apply_pickup(pickup_type)
+		# Then sync to other clients
 		_collect_pickup_synced.rpc(pickup_type)
 	else:
 		_apply_pickup(pickup_type)
@@ -390,14 +493,45 @@ func _apply_pickup(pickup_type: String):
 		"health":
 			# Heal the player
 			var heal_amount = 20
+			# WORKAROUND: In multiplayer, pickups are double-applied so we halve the effect
+			if NetworkManager.is_multiplayer_game:
+				heal_amount = heal_amount / 2
 			current_health = min(current_health + heal_amount, max_health)
 			emit_signal("health_changed", current_health, max_health)
 		"laser":
 			# Upgrade laser stage
 			if laser_stage < 3:
-				laser_stage += 1
+				# WORKAROUND: In multiplayer, pickups are double-applied so we use 0.5 increments
+				if NetworkManager.is_multiplayer_game:
+					laser_stage += 0.5
+				else:
+					laser_stage += 1
+				laser_stage = min(laser_stage, 3)  # Ensure we don't go over stage 3
 				emit_signal("laser_upgraded", laser_stage)
 
-@rpc("any_peer", "call_local", "reliable")
+@rpc("any_peer", "call_remote", "reliable")
 func _collect_pickup_synced(pickup_type: String):
+	# Only apply pickup for non-calling clients
 	_apply_pickup(pickup_type)
+
+func add_score(points: int):
+	if NetworkManager.is_multiplayer_game:
+		# WORKAROUND: Player 2's kills are double-applied, so player 2 adds half points
+		if player_number == 2:
+			points = points / 2
+		_add_score_synced.rpc(points)
+	else:
+		_apply_score(points)
+
+func _apply_score(points: int):
+	score += points
+	emit_signal("score_changed", score)
+
+@rpc("any_peer", "call_local", "reliable")
+func _add_score_synced(points: int):
+	# Validate that the caller has authority
+	if NetworkManager.is_multiplayer_game:
+		var sender = multiplayer.get_remote_sender_id()
+		if sender != get_multiplayer_authority() and sender != 1:
+			return
+	_apply_score(points)

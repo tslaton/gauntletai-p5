@@ -1,6 +1,7 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" uid="uid://deu5klk0dr4o7" path="res://fx/explosion.gd" id="1_exp"]
+[ext_resource type="AudioStream" uid="uid://c62556cu7iqgp" path="res://assets/sounds/explosion.mp3" id="2_sound"]
 
 [sub_resource type="Gradient" id="Gradient_1"]
 offsets = PackedFloat32Array(0, 0.1, 0.3, 0.6, 1)
@@ -50,5 +51,13 @@ draw_pass_1 = SubResource("SphereMesh_1")
 [node name="Timer" type="Timer" parent="."]
 wait_time = 1.5
 one_shot = true
+
+[node name="ExplosionSound" type="AudioStreamPlayer3D" parent="."]
+stream = ExtResource("2_sound")
+volume_db = 0.0
+pitch_scale = 1.0
+attenuation_model = 1
+unit_size = 20.0
+max_distance = 300.0
 
 [connection signal="timeout" from="Timer" to="." method="_on_timer_timeout"]

@@ -1,7 +1,7 @@
 [gd_scene load_steps=5 format=3 uid="uid://dn58rrkgbd6d3"]
 
 [ext_resource type="Script" uid="uid://df1ntxpad2nqb" path="res://player/player.gd" id="1_4flbx"]
-[ext_resource type="PackedScene" uid="uid://ce6k1ypu43aaw" path="res://assets/models/player1.glb" id="4_player1"]
+[ext_resource type="PackedScene" uid="uid://bhs5gqwbcosg3" path="res://assets/models/player1.glb" id="4_player1"]
 [ext_resource type="PackedScene" uid="uid://dqdhyykrrnlgr" path="res://fx/jet_exhaust.tscn" id="5_jet"]
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_g1dw6"]

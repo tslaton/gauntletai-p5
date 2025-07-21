@@ -4,9 +4,11 @@ extends CharacterBody3D
 @export var speed_min: float = 20.0
 @export var speed_max: float = 50.0
 @export var damage: int = 10  # Damage this enemy's bullets deal
-@export var shoot_cooldown: float = 2.0  # Time between shots
-@export var bullet_speed: float = 400.0  # Speed of enemy bullets
+@export var shoot_cooldown: float = 3.0  # Time between bursts
+@export var bullet_speed: float = 150.0  # Speed of enemy bullets
 @export var max_health: int = 30  # Enemy health
+@export var burst_count: int = 3  # Number of bullets per burst
+@export var burst_delay: float = 0.15  # Delay between bullets in burst
 
 var speed: float
 var current_health: int
@@ -15,6 +17,7 @@ var EnemyBullet = preload("res://projectiles/enemy_bullet.tscn")
 var LaserImpact = preload("res://fx/laser_impact.tscn")
 var LaserPickup = preload("res://pickups/laser_pickup.tscn")
 var HealthPickup = preload("res://pickups/health_pickup.tscn")
+var LaserSound = preload("res://assets/sounds/laser.mp3")
 var shoot_timer: float = 0.0
 var player_ref: Node3D
 var mesh_instance: MeshInstance3D
@@ -22,18 +25,26 @@ var original_material: Material
 var hit_flash_timer: float = 0.0
 const HIT_FLASH_DURATION: float = 0.1
 var is_dying: bool = false
+var is_bursting: bool = false
+var burst_shots_fired: int = 0
+var burst_timer: float = 0.0
+const RECYCLE_Z_THRESHOLD: float = 5.0
 
 func _ready():
 	# Add to enemies group
 	add_to_group("Enemies")
+	
+	# Set collision layers: Enemy is on layer 3
+	collision_layer = 4  # Only on Enemy layer (bit 3)
+	collision_mask = 8  # Only collide with PlayerBullet (bit 4)
 	
 	# Initialize health
 	current_health = max_health
 	
 	# Randomize speed
 	speed = randf_range(speed_min, speed_max)
-	# Find nearest player reference
-	find_nearest_player()
+	# Select target player
+	select_target_player()
 	# Start shoot timer with some randomness
 	shoot_timer = randf_range(0.5, shoot_cooldown)
 	
@@ -45,6 +56,16 @@ func _ready():
 			original_material = mesh_instance.mesh.surface_get_material(0)
 
 func _physics_process(delta: float) -> void:
+	# Handle recycling when enemy gets too close to camera (runs on all clients)
+	if global_position.z >= RECYCLE_Z_THRESHOLD:
+		queue_free()
+		return
+	
+	# Immediate destruction if enemy goes too far behind camera
+	if transform.origin.z > 10:
+		queue_free()
+		return
+	
 	# Only server processes enemy movement in multiplayer
 	if NetworkManager.is_multiplayer_game and not NetworkManager.is_host:
 		return
@@ -65,19 +86,34 @@ func _physics_process(delta: float) -> void:
 	
 	# Shooting logic
 	if not player_ref or not is_instance_valid(player_ref) or not player_ref.visible:
-		find_nearest_player()
+		select_target_player()
 	
 	if player_ref and is_instance_valid(player_ref):
-		shoot_timer -= delta
-		if shoot_timer <= 0.0:
-			shoot_at_player()
-			shoot_timer = shoot_cooldown
-	
-	# destroy enemies when they go behind the camera
-	if transform.origin.z > 10:
-		queue_free()
+		# Handle burst firing
+		if is_bursting:
+			burst_timer -= delta
+			if burst_timer <= 0.0:
+				fire_single_bullet()
+				burst_shots_fired += 1
+				
+				if burst_shots_fired >= burst_count:
+					# Burst complete
+					is_bursting = false
+					burst_shots_fired = 0
+					shoot_timer = shoot_cooldown
+				else:
+					# Set timer for next bullet in burst
+					burst_timer = burst_delay
+		else:
+			# Normal cooldown between bursts
+			shoot_timer -= delta
+			if shoot_timer <= 0.0:
+				# Start new burst
+				is_bursting = true
+				burst_shots_fired = 0
+				burst_timer = 0.0
 
-func shoot_at_player():
+func fire_single_bullet():
 	if not player_ref:
 		return
 		
@@ -85,7 +121,7 @@ func shoot_at_player():
 	if NetworkManager.is_multiplayer_game and not NetworkManager.is_host:
 		return
 	
-	# Calculate direction to player with some prediction
+	# Calculate direction to player
 	var player_pos = player_ref.global_position
 	var direction = (player_pos - global_position).normalized()
 	
@@ -109,18 +145,36 @@ func _spawn_enemy_bullet(spawn_pos: Vector3, direction: Vector3, speed: float, d
 	# Orient bullet to face direction
 	if direction.length() > 0:
 		bullet.look_at(bullet.global_position + direction, Vector3.UP)
+	
+	# Play laser sound
+	var audio_player = AudioStreamPlayer3D.new()
+	audio_player.stream = LaserSound
+	audio_player.volume_db = -5.0
+	audio_player.pitch_scale = randf_range(0.9, 1.1)  # Slight pitch variation
+	audio_player.attenuation_model = 1  # Linear distance attenuation
+	audio_player.unit_size = 10.0
+	audio_player.max_distance = 200.0
+	audio_player.bus = "Master"
+	get_parent().add_child(audio_player)
+	audio_player.global_position = spawn_pos
+	audio_player.play()
+	
+	# Clean up audio player when done
+	audio_player.finished.connect(audio_player.queue_free)
 
 @rpc("authority", "call_local", "reliable")
 func _spawn_enemy_bullet_synced(spawn_pos: Vector3, direction: Vector3, speed: float, dmg: int):
 	_spawn_enemy_bullet(spawn_pos, direction, speed, dmg)
 
-func take_damage(damage: int, impact_point: Vector3 = Vector3.ZERO):
+func take_damage(damage: int, impact_point: Vector3 = Vector3.ZERO, shooter: Node3D = null):
 	if NetworkManager.is_multiplayer_game:
-		_take_damage_synced.rpc(damage, impact_point)
+		var shooter_path = shooter.get_path() if shooter else ""
+		_take_damage_synced.rpc(damage, impact_point, shooter_path)
 	else:
-		_apply_damage(damage, impact_point)
+		_apply_damage(damage, impact_point, shooter)
 
-func _apply_damage(damage: int, impact_point: Vector3):
+func _apply_damage(damage: int, impact_point: Vector3, shooter: Node3D = null):
+	var was_alive = current_health > 0
 	current_health -= damage
 	
 	# Flash effect
@@ -129,12 +183,18 @@ func _apply_damage(damage: int, impact_point: Vector3):
 	# Create impact effect at hit location
 	create_impact_effect(impact_point if impact_point != Vector3.ZERO else global_position)
 	
-	if current_health <= 0:
+	if current_health <= 0 and was_alive:
+		# Award points to the shooter
+		if shooter and shooter.has_method("add_score"):
+			shooter.add_score(20)
 		die()
 
 @rpc("any_peer", "call_local", "reliable")
-func _take_damage_synced(damage: int, impact_point: Vector3):
-	_apply_damage(damage, impact_point)
+func _take_damage_synced(damage: int, impact_point: Vector3, shooter_path: String):
+	var shooter = null
+	if shooter_path != "":
+		shooter = get_node_or_null(shooter_path)
+	_apply_damage(damage, impact_point, shooter)
 
 @rpc("unreliable")
 func _sync_enemy_position(new_position: Vector3):
@@ -204,17 +264,52 @@ func _die_synced():
 	is_dying = true
 	_perform_death()
 
-func find_nearest_player():
+func get_health() -> int:
+	return current_health
+
+func select_target_player():
 	var players = get_tree().get_nodes_in_group("Player")
-	var nearest_distance = INF
-	player_ref = null
+	var valid_players = []
+	var distances = []
 	
+	# Get all valid players and their distances
 	for player in players:
 		if player.visible and is_instance_valid(player):
 			var distance = global_position.distance_to(player.global_position)
-			if distance < nearest_distance:
-				nearest_distance = distance
-				player_ref = player
+			valid_players.append(player)
+			distances.append(distance)
+	
+	if valid_players.is_empty():
+		player_ref = null
+		return
+	
+	# If only one player, target them
+	if valid_players.size() == 1:
+		player_ref = valid_players[0]
+		return
+	
+	# Calculate weights based on inverse distance (closer = higher weight)
+	var weights = []
+	var total_weight = 0.0
+	
+	for i in range(distances.size()):
+		# Use inverse distance for weight (add 1 to avoid division by zero)
+		var weight = 1.0 / (distances[i] + 1.0)
+		weights.append(weight)
+		total_weight += weight
+	
+	# Normalize weights and select random player
+	var random_value = randf() * total_weight
+	var cumulative_weight = 0.0
+	
+	for i in range(valid_players.size()):
+		cumulative_weight += weights[i]
+		if random_value <= cumulative_weight:
+			player_ref = valid_players[i]
+			return
+	
+	# Fallback (shouldn't reach here)
+	player_ref = valid_players[0]
 
 func spawn_pickup(pickup_scene: PackedScene):
 	var pickup = pickup_scene.instantiate()
